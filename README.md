@@ -22,7 +22,8 @@ Polish.
   The Beacon boosts the eight tiles around it, and boosts add up. On open floor every agent is
   part of the maze, and the preview shows the new route before you commit.
 - **Undo is free.** Selling in the same build phase refunds everything, so a layout can be tried
-  and taken back.
+  and taken back. The maze on open floor only changes between waves (sockets stay open), so
+  faults cannot be juggled back and forth by opening and closing a gap.
 
 | Agent    | Role                                                             |
 | -------- | ---------------------------------------------------------------- |
@@ -48,7 +49,8 @@ Balancing a puzzle by hand is guesswork, so the repository carries its own tools
   each one and expects a win, so every level is winnable at its shipped difficulty.
 - **A difficulty probe** (`npm run probe`). A careless player spends all its credits on random
   agents near the route and upgrades at random. From the third level on it wins at most 15% of
-  the time (a test holds that line); in practice it wins 0–6%.
+  the time (a test holds that line); in practice it wins at most one game in ten,
+  and almost never from the fourth level on.
 - **A tuning table** (`npm run tune -- <level>`): solver result and careless win rate across a
   range of enemy strength. Each level ships at 50–90% of the strength the solver can still beat,
   lower for the tutorial levels and closer to the edge for the last ones.
@@ -85,7 +87,7 @@ tests/        engine mechanics, levels (solutions win, careless play loses), i18
 Keyboard play end to end: `1`–`7` pick an agent, arrow keys move a board cursor with spoken cell
 descriptions, `Enter` builds or selects, `Space` starts a wave or pauses, `U`/`S`/`T` upgrade,
 sell and change the target, `F` changes speed, `Esc` cancels. Game events are announced in a
-live region, dialogs trap focus, and `prefers-reduced-motion` stops screen shake, idle animation
+live region, dialogs keep focus and make the page behind them inert, and `prefers-reduced-motion` stops screen shake, idle animation
 and most particles. On touch screens the first tap previews a placement and the second builds.
 
 ## Embedding
