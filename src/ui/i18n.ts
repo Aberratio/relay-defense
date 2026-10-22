@@ -148,11 +148,13 @@ const en = {
     'Game board. Use the arrow keys to move the cursor and Enter to build or select an agent.',
   announce: {
     waveStart: (n: number) => `Wave ${n} started.`,
-    waveClear: (n: number, bonus: number) => `Wave ${n} cleared. Bonus ${bonus} credits.`,
+    waveClear: (n: number, bonus: number) =>
+      `Wave ${n} cleared. Bonus ${plural(bonus, 'en', ['credit', 'credits', 'credits'])}.`,
     leak: (lives: number) => `A fault reached the core. Integrity ${lives}.`,
     built: (name: string) => `${name} built.`,
     upgraded: (name: string, level: number) => `${name} upgraded to level ${level}.`,
-    sold: (credits: number) => `Sold for ${credits} credits.`,
+    sold: (credits: number) =>
+      `Sold for ${plural(credits, 'en', ['credit', 'credits', 'credits'])}.`,
     cursor: (x: number, y: number, what: string) => `Column ${x + 1}, row ${y + 1}: ${what}.`,
   },
   tiles: {

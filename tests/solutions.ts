@@ -52,23 +52,20 @@ export const SOLUTIONS: Solution[] = [
     level: 'bulwark',
     waves: [
       [
-        ['build', 'lance', 7, 5],
-        ['up', 7, 5],
-      ],
-      [],
-      [
         ['build', 'lance', 9, 3],
-        ['build', 'pulse', 3, 1],
+        ['up', 9, 3],
       ],
       [
-        ['build', 'lance', 4, 1],
-        ['build', 'pulse', 4, 3],
+        ['build', 'pulse', 13, 4],
+        ['up', 13, 4],
       ],
+      [['up', 13, 4]],
+      [['build', 'lance', 3, 3]],
       [
-        ['build', 'lance', 2, 1],
-        ['up', 3, 1],
+        ['build', 'lance', 4, 3],
+        ['build', 'lance', 1, 1],
       ],
-      [['build', 'lance', 1, 1]],
+      [['build', 'lance', 2, 1]],
     ],
   },
   {
@@ -135,9 +132,10 @@ export const SOLUTIONS: Solution[] = [
       ],
       [
         ['build', 'lance', 2, 1],
-        ['build', 'lance', 5, 3],
+        ['up', 6, 3],
+        ['up', 6, 3],
       ],
-      [['up', 6, 3]],
+      [['build', 'lance', 1, 1]],
     ],
   },
   {

@@ -49,8 +49,8 @@ Balancing a puzzle by hand is guesswork, so the repository carries its own tools
   each one and expects a win, so every level is winnable at its shipped difficulty.
 - **A difficulty probe** (`npm run probe`). A careless player spends all its credits on random
   agents near the route and upgrades at random. From the third level on it wins at most 15% of
-  the time (a test holds that line); in practice it wins at most one game in ten,
-  and almost never from the fourth level on.
+  the time (a test holds that line); in 300 runs per level it
+  wins 3% of the third level and at most 1% of any later one.
 - **A tuning table** (`npm run tune -- <level>`): solver result and careless win rate across a
   range of enemy strength. Each level ships at 50–90% of the strength the solver can still beat,
   lower for the tutorial levels and closer to the edge for the last ones.

@@ -759,6 +759,11 @@ export class App {
     const dealt = panel.querySelector<HTMLElement>('[data-role="dealt"]');
     if (dealt)
       dealt.textContent = `${this.t.dealt}: ${Math.round(tower.damageDealt)} · ${this.t.kills}: ${tower.kills}`;
+    // A control that just became disabled cannot keep focus: hand it to the board.
+    const active = document.activeElement;
+    if (active instanceof HTMLButtonElement && active.disabled && panel.contains(active)) {
+      this.canvas.focus({ preventScroll: true });
+    }
   }
 
   private traitsEl(kind: EnemyKind): HTMLElement {
@@ -934,12 +939,13 @@ export class App {
     const game = this.game;
     if (!game || this.dialogKind) return;
     const tower = game.towerAt(cell.x, cell.y);
+    // An agent on the tile is selected, whatever kind is picked for building.
+    if (tower) {
+      this.selectTower(tower.id);
+      return;
+    }
     if (this.selectedKind) {
       const error = game.canPlace(this.selectedKind, cell.x, cell.y);
-      if (error === 'occupied' && tower) {
-        this.selectTower(tower.id);
-        return;
-      }
       if (error) {
         this.toast(this.t.placeErrors[error]);
         return;
@@ -949,7 +955,7 @@ export class App {
       this.flush();
       return;
     }
-    this.selectTower(tower ? tower.id : null);
+    this.selectTower(null);
   }
 
   private upgradeSelected(): void {
@@ -1119,7 +1125,7 @@ export class App {
   }
 
   private globalKey(e: KeyboardEvent): void {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (this.dialogKind) {
       if (e.key === 'Escape' && this.dialogKind !== 'result') {
         e.preventDefault();
@@ -1129,7 +1135,7 @@ export class App {
       return;
     }
     const game = this.game;
-    if (!game) return;
+    if (!game || e.repeat) return;
     const target = e.target as HTMLElement | null;
     const onButton = target?.tagName === 'BUTTON' || target?.tagName === 'A';
     const key = e.key.toLowerCase();

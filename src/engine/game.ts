@@ -242,9 +242,9 @@ export class Game {
     if (!isBuildableTile(tile)) return 'tile';
     if (kind === 'wall' && tile !== '.') return 'tile';
     if (this.towerAt(x, y)) return 'occupied';
+    if (isWalkableTile(tile) && this.phase === 'wave') return 'wave';
     if (this.credits < TOWERS[kind].levels[0].cost) return 'funds';
     if (isWalkableTile(tile)) {
-      if (this.phase === 'wave') return 'wave';
       const blocked = [...this.blocked];
       blocked[index(this.grid, x, y)] = true;
       const dist = flowField(this.grid, blocked);
@@ -674,6 +674,8 @@ export class Game {
     const hit = new Set<Enemy>();
     let current: Enemy | null = first;
     let dmg = damage;
+    // Taken once: fragments a Splitter drops during this discharge are not hit by it.
+    const pool = [...this.enemies];
     while (current && hit.size < jumps) {
       hit.add(current);
       points.push({ x: current.x, y: current.y });
@@ -682,8 +684,7 @@ export class Game {
       const from: Enemy = current;
       current = null;
       let bestD = ARC_JUMP;
-      // A copy: fragments a Splitter drops in this discharge are not hit by it.
-      for (const e of [...this.enemies]) {
+      for (const e of pool) {
         if (hit.has(e) || !this.targetable(e)) continue;
         const d = distance(from, e);
         if (d <= bestD) {

@@ -208,6 +208,27 @@ describe('combat', () => {
     expect(split).toBe(true);
   });
 
+  it('an Arc discharge does not chain into the fragments it just made', () => {
+    const game = new Game(
+      level(['#######', 'S=====C', '#^^^^^#', '#######'], {
+        hpScale: 0.05,
+        waves: oneWave('splitter'),
+      }),
+    );
+    game.place('arc', 1, 2);
+    game.startWave();
+    for (let i = 0; i < 30 * 5 && game.phase === 'wave'; i++) {
+      game.step();
+      const arc = game.drainEvents().find((e) => e.type === 'arc');
+      if (arc && arc.type === 'arc') {
+        expect(arc.points).toHaveLength(2);
+        expect(game.enemies.filter((e) => e.kind === 'mite')).toHaveLength(3);
+        return;
+      }
+    }
+    throw new Error('the Arc never fired');
+  });
+
   it('Throttle slows; two Throttles do not stack', () => {
     const one = new Game(level(OPEN, { waves: oneWave('bulwark') }));
     one.place('throttle', 2, 1);
