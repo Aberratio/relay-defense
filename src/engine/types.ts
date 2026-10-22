@@ -77,4 +77,8 @@ export interface LevelDef {
 
 export type Phase = 'build' | 'wave' | 'won' | 'lost';
 
-export type PlaceError = 'tile' | 'occupied' | 'enemy' | 'blocks' | 'funds' | 'locked' | 'over';
+/**
+ * Why a tower cannot go on a tile (or come off it). `wave`: the maze on walkable floor only changes
+ * between waves, so faults cannot be juggled back and forth by opening and closing gaps.
+ */
+export type PlaceError = 'tile' | 'occupied' | 'blocks' | 'funds' | 'locked' | 'over' | 'wave';

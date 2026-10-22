@@ -61,6 +61,8 @@ export interface Enemy {
   shield: number;
   /** Ticks to stand still (fragments of a Splitter spread out this way). */
   hold: number;
+  /** Hit point multiplier it spawned with; Splitter fragments inherit it. */
+  scale: number;
   dead: boolean;
   /** Distance walked, for the renderer's gait. */
   walked: number;
@@ -183,6 +185,11 @@ export class Game {
     return g;
   }
 
+  /** Enemies of the current wave that have not entered the board yet. */
+  toSpawn(): number {
+    return this.phase === 'wave' ? this.schedule.length - this.scheduleAt : 0;
+  }
+
   /** True while a wave is being played (a method, so a loop condition re-reads it). */
   running(): boolean {
     return this.phase === 'wave';
@@ -237,14 +244,13 @@ export class Game {
     if (this.towerAt(x, y)) return 'occupied';
     if (this.credits < TOWERS[kind].levels[0].cost) return 'funds';
     if (isWalkableTile(tile)) {
-      if (this.enemies.some((e) => this.occupies(e, x, y))) return 'enemy';
+      if (this.phase === 'wave') return 'wave';
       const blocked = [...this.blocked];
       blocked[index(this.grid, x, y)] = true;
       const dist = flowField(this.grid, blocked);
       const reaches = (c: Cell) =>
         (dist[index(this.grid, c.x, c.y)] ?? UNREACHABLE) !== UNREACHABLE;
       if (!this.grid.spawns.every(reaches)) return 'blocks';
-      if (!this.enemies.every((e) => e.dead || reaches(e.next ?? e.cell))) return 'blocks';
     }
     return null;
   }
@@ -301,9 +307,16 @@ export class Game {
     return tower.freshCredits + Math.floor(tower.lockedCredits * SELL_REFUND);
   }
 
+  /** Why a tower cannot be sold right now, or null when it can. */
+  canSell(tower: Tower): PlaceError | null {
+    if (this.phase === 'won' || this.phase === 'lost') return 'over';
+    if (this.phase === 'wave' && this.blocked[index(this.grid, tower.x, tower.y)]) return 'wave';
+    return null;
+  }
+
   sell(id: number): boolean {
     const tower = this.towerById(id);
-    if (!tower || this.phase === 'won' || this.phase === 'lost') return false;
+    if (!tower || this.canSell(tower)) return false;
     const refund = this.sellValue(tower);
     this.credits += refund;
     this.stats.spent -= tower.freshCredits;
@@ -393,13 +406,6 @@ export class Game {
     else tower.lockedCredits += cost;
   }
 
-  private occupies(e: Enemy, x: number, y: number): boolean {
-    if (e.dead) return false;
-    if (Math.floor(e.x) === x && Math.floor(e.y) === y) return true;
-    if (e.cell.x === x && e.cell.y === y) return true;
-    return e.next !== null && e.next.x === x && e.next.y === y;
-  }
-
   private spawnDue(): void {
     for (
       let s = this.schedule[this.scheduleAt];
@@ -438,6 +444,7 @@ export class Game {
       hold,
       dead: false,
       walked: 0,
+      scale: hpScale,
     };
     enemy.next = nextStep(this.grid, this.dist, enemy.cell, heading);
     this.enemies.push(enemy);
@@ -600,14 +607,18 @@ export class Game {
     for (const t of this.towers) {
       const spec = TOWERS[t.kind];
       if (spec.passive) continue;
-      t.cooldown = Math.max(0, t.cooldown - DT);
-      if (t.cooldown > 0) continue;
+      // Keep the fractional remainder, so the real rate matches the stated one between ticks.
+      t.cooldown -= DT;
+      if (t.cooldown > 1e-9) continue;
       const target = this.pickTarget(t);
-      if (!target) continue;
+      if (!target) {
+        t.cooldown = 0;
+        continue;
+      }
       const l = this.stat(t);
       const from = centre(t);
       t.angle = Math.atan2(target.y - from.y, target.x - from.x);
-      t.cooldown = 1 / l.rate;
+      t.cooldown += 1 / l.rate;
       const damage = l.damage * (1 + this.boost(t));
       switch (t.kind) {
         case 'pulse':
@@ -671,7 +682,8 @@ export class Game {
       const from: Enemy = current;
       current = null;
       let bestD = ARC_JUMP;
-      for (const e of this.enemies) {
+      // A copy: fragments a Splitter drops in this discharge are not hit by it.
+      for (const e of [...this.enemies]) {
         if (hit.has(e) || !this.targetable(e)) continue;
         const d = distance(from, e);
         if (d <= bestD) {
@@ -685,7 +697,8 @@ export class Game {
 
   private fireBeam(t: Tower, target: Enemy, damage: number, range: number): void {
     const from = centre(t);
-    const len = distance(from, target) || 1;
+    const len = distance(from, target);
+    if (len === 0) return;
     const ux = (target.x - from.x) / len;
     const uy = (target.y - from.y) / len;
     const to = { x: from.x + ux * range, y: from.y + uy * range };
@@ -765,7 +778,7 @@ export class Game {
           e.cell,
           { x: e.x, y: e.y },
           e.heading,
-          1,
+          e.scale,
           i * 8,
         );
         child.next = e.next && { ...e.next };

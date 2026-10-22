@@ -3,7 +3,7 @@
 // the board interpolates positions between ticks, so motion stays smooth at any refresh rate.
 import { centre, type Game, type GameEvent } from '../engine/game';
 import { tileAt } from '../engine/grid';
-import { ENEMIES, TOWERS } from '../engine/stats';
+import { DT, ENEMIES, TOWERS } from '../engine/stats';
 import type { Cell, TowerKind } from '../engine/types';
 import { Effects } from './effects';
 import { alpha, type Palette } from './palette';
@@ -560,7 +560,7 @@ export class BoardRenderer {
         ctx.arc(x * s, y * s, Math.max(1.2, s * 0.045), 0, Math.PI * 2);
         ctx.fill();
       } else {
-        const k = Math.min(1, (shot.age + lerp / 30) / shot.flight);
+        const k = Math.min(1, (shot.age + lerp * DT) / shot.flight);
         const lift = Math.sin(Math.PI * k) * s * 0.9;
         // Landing marker and shadow.
         ctx.strokeStyle = alpha(p.signal, 0.35 + 0.4 * k);
@@ -600,7 +600,18 @@ export class BoardRenderer {
       ctx.save();
       ctx.globalAlpha = ghost.valid ? 0.75 : 0.35;
       ctx.translate((cell.x + 0.5) * s, (cell.y + 0.5) * s);
-      drawTower(ctx, { kind: ghost.kind, level: 0, angle: -Math.PI / 2, time, recoil: 0 }, s, p);
+      drawTower(
+        ctx,
+        {
+          kind: ghost.kind,
+          level: 0,
+          angle: -Math.PI / 2,
+          time: this.reducedMotion ? 0 : time,
+          recoil: 0,
+        },
+        s,
+        p,
+      );
       ctx.restore();
     }
     const colour = ghost

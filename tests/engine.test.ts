@@ -96,10 +96,38 @@ describe('placement rules', () => {
     expect(game.canPlace('pulse', 3, 2)).toBe('funds');
   });
 
-  it('refuses a cell an enemy stands on', () => {
-    const game = new Game(level(OPEN, { waves: oneWave('bulwark') }));
-    const e = spawnOne(game);
-    expect(game.canPlace('wall', e.next!.x, e.next!.y)).toBe('enemy');
+  it('freezes the maze on walkable floor during a wave, but not the sockets', () => {
+    const game = new Game(
+      level(['########', '#^^^^^^#', 'S......C', '#......#', '########'], {
+        waves: oneWave('bulwark'),
+      }),
+    );
+    const wall = game.place('wall', 5, 2)!;
+    spawnOne(game);
+    expect(game.canPlace('wall', 3, 2)).toBe('wave');
+    expect(game.canPlace('pulse', 3, 1)).toBeNull();
+    expect(game.canSell(wall)).toBe('wave');
+    expect(game.sell(wall.id)).toBe(false);
+    const pad = game.place('pulse', 3, 1)!;
+    expect(game.sell(pad.id)).toBe(true);
+  });
+
+  it('fires at the stated rate over time', () => {
+    const game = new Game(
+      level(['##########', 'S========C', '#^^^^^^^^#', '##########'], {
+        waves: oneWave('bulwark', 1, 1),
+      }),
+    );
+    const t = game.place('pulse', 4, 2)!;
+    game.startWave();
+    const fired: number[] = [];
+    for (let i = 0; i < 30 * 8; i++) {
+      game.step();
+      if (game.drainEvents().some((e) => e.type === 'bolt' && e.towerId === t.id)) fired.push(i);
+    }
+    // While the target stays in range, ten shots span 9 intervals of 1/2.5 s = 3.6 s (108 ticks).
+    expect(fired.length).toBeGreaterThanOrEqual(10);
+    expect(fired[9]! - fired[0]!).toBeLessThanOrEqual(109);
   });
 });
 

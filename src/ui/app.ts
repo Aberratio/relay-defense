@@ -100,6 +100,8 @@ export class App {
   private resultTimer = 0;
   private toastTimer = 0;
   private dialogKind: 'brief' | 'result' | 'help' | null = null;
+  /** The element that had focus when a dialog opened, to return to on close. */
+  private opener: HTMLElement | null = null;
   private infoRefresh = 0;
   private hud = { lives: -1, credits: -1, wave: '' };
   private ghostCache: {
@@ -155,9 +157,12 @@ export class App {
       if (e.pointerType !== 'touch' && !this.keyboardCursor) this.setHover(null);
     });
     c.addEventListener('pointerup', (e) => {
+      // Only the primary button acts: a right click cancels (contextmenu), it never builds.
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       const cell = this.renderer.cellAt(e.clientX, e.clientY);
       if (!cell) return;
-      if (e.pointerType === 'touch' && this.selectedKind) {
+      const tower = this.game?.towerAt(cell.x, cell.y);
+      if (e.pointerType === 'touch' && this.selectedKind && !tower) {
         // Touch: the first tap previews the placement, a second tap on the same tile builds.
         const key = `${cell.x},${cell.y}`;
         this.setHover(cell);
@@ -196,6 +201,8 @@ export class App {
       if (typeof value === 'string') el.textContent = value;
     }
     $('home').title = this.t.menu;
+    $('help-open').setAttribute('aria-label', this.t.help);
+    $('help-open').title = this.t.help;
     $('lang-switch').setAttribute('aria-label', this.t.langLabel);
     for (const btn of $('lang-switch').querySelectorAll<HTMLButtonElement>('button')) {
       btn.setAttribute('aria-pressed', String(btn.dataset.lang === lang));
@@ -290,6 +297,12 @@ export class App {
     this.acc = 0;
     this.hud = { lives: -1, credits: -1, wave: '' };
     this.cursor = { ...this.game.grid.core };
+    this.hover = null;
+    this.keyboardCursor = false;
+    this.armedTouch = null;
+    this.ghostCache = null;
+    window.clearTimeout(this.toastTimer);
+    $('toast').hidden = true;
     $('menu').hidden = true;
     $('game').hidden = false;
     $('stats').hidden = false;
@@ -312,19 +325,37 @@ export class App {
     content: Node[],
     focus?: HTMLElement,
   ): void {
+    if (!this.dialogKind) {
+      const active = document.activeElement;
+      this.opener = active instanceof HTMLElement && active !== document.body ? active : null;
+    }
     this.dialogKind = kind;
     const dialog = $('dialog');
     dialog.className = `dialog dialog-${kind}`;
     dialog.replaceChildren(...content);
     $('overlay').hidden = false;
+    this.setInert(true);
     (focus ?? dialog.querySelector<HTMLElement>('button'))?.focus({ preventScroll: true });
+    // In a frame the page around it scrolls, not the frame: bring the dialog into view.
+    if (this.opts.embed) dialog.scrollIntoView({ block: 'nearest' });
   }
 
   private closeDialog(): void {
     if (!this.dialogKind) return;
     this.dialogKind = null;
     $('overlay').hidden = true;
+    this.setInert(false);
+    const back = this.opener?.isConnected && !this.opener.closest('[hidden]') ? this.opener : null;
+    this.opener = null;
     if (this.game) this.canvas.focus({ preventScroll: true });
+    else back?.focus({ preventScroll: true });
+  }
+
+  /** Everything behind an open dialog is out of reach for focus and assistive technology. */
+  private setInert(on: boolean): void {
+    for (const el of document.querySelectorAll<HTMLElement>('#app > header, #app > main')) {
+      el.inert = on;
+    }
   }
 
   private openBrief(): void {
@@ -399,7 +430,11 @@ export class App {
       h('p', { class: 'dialog-note', text: this.t.starsRule }),
       h('h3', { text: this.t.keysTitle }),
       keys,
-      h('div', { class: 'dialog-actions' }, [h('p', { class: 'dialog-note' }, [source]), close]),
+      h('div', { class: 'dialog-actions' }, [
+        // In the portfolio frame the page around it already links the repository.
+        ...(this.opts.embed ? [] : [h('p', { class: 'dialog-note' }, [source])]),
+        close,
+      ]),
     ]);
   }
 
@@ -552,7 +587,7 @@ export class App {
       pair(this.t.slow, l.special, n?.special, (v) => `${Math.round(v * 100)}%`);
     if (kind === 'beacon')
       pair(this.t.boost, l.special, n?.special, (v) => `+${Math.round(v * 100)}%`);
-    if (kind === 'lance') rows.push([this.t.armour, '0']);
+    if (kind === 'lance') rows.push([this.t.armour, this.t.ignoresArmour]);
     return h(
       'dl',
       { class: 'stat-rows' },
@@ -563,7 +598,23 @@ export class App {
     );
   }
 
+  /** Rebuilds the info panel and keeps keyboard focus on the matching control. */
   private renderInfo(): void {
+    const panel = $('info');
+    const active = document.activeElement;
+    const key =
+      active instanceof HTMLElement && panel.contains(active)
+        ? (active.dataset.role ?? active.dataset.mode ?? null)
+        : null;
+    this.buildInfo();
+    if (key) {
+      const again = panel.querySelector<HTMLElement>(`[data-role="${key}"], [data-mode="${key}"]`);
+      if (again && !(again as HTMLButtonElement).disabled) again.focus({ preventScroll: true });
+      else this.canvas.focus({ preventScroll: true });
+    }
+  }
+
+  private buildInfo(): void {
     const panel = $('info');
     const game = this.game;
     const info = this.info;
@@ -655,6 +706,7 @@ export class App {
           text: this.t.modes[mode],
           attrs: {
             type: 'button',
+            'data-mode': mode,
             'aria-pressed': String(tower.mode === mode),
             title: this.t.modeHelp[mode],
           },
@@ -694,7 +746,9 @@ export class App {
     if (sell) {
       const value = game.sellValue(tower);
       sell.textContent = `${tower.lockedCredits === 0 ? this.t.undo : this.t.sell} · +${value}`;
-      sell.disabled = over;
+      const blocked = game.canSell(tower);
+      sell.disabled = blocked !== null;
+      sell.title = blocked === 'wave' ? this.t.placeErrors.wave : '';
     }
     const boost = panel.querySelector<HTMLElement>('[data-role="boost"]');
     if (boost) {
@@ -725,6 +779,16 @@ export class App {
   }
 
   private renderWaves(): void {
+    const active = document.activeElement;
+    const foe = active instanceof HTMLElement ? active.dataset.foe : undefined;
+    this.buildWaves();
+    if (foe) {
+      const again = $('wave-next').querySelector<HTMLElement>(`[data-foe="${foe}"]`);
+      (again ?? this.canvas).focus({ preventScroll: true });
+    }
+  }
+
+  private buildWaves(): void {
     const game = this.game;
     if (!game) return;
     const t = this.t;
@@ -751,7 +815,7 @@ export class App {
       ...(done
         ? []
         : groupsOf(idx).map(([kind, count]) => {
-            const b = h('button', { class: 'foe', attrs: { type: 'button' } }, [
+            const b = h('button', { class: 'foe', attrs: { type: 'button', 'data-foe': kind } }, [
               this.enemyIcon(kind, 30),
               h('span', { class: 'foe-name', text: t.enemies[kind].name }),
               h('span', { class: 'foe-count', text: `× ${count}` }),
@@ -824,12 +888,13 @@ export class App {
       ($('stat-wave').querySelector('.stat-value') as HTMLElement).textContent = wave;
     this.hud = { lives: game.lives, credits: game.credits, wave };
     if (game.phase === 'wave') {
-      const left = game.enemies.length;
+      const left = game.enemies.length + game.toSpawn();
       const bar = $('wave-progress').firstElementChild as HTMLElement;
       const total = Math.max(
         1,
         game.level.waves[game.wave]?.groups.reduce((n, g) => n + g.count, 0) ?? 1,
       );
+      $('wave-progress').title = this.t.remaining(left);
       bar.style.width = `${Math.max(0, Math.min(100, (left / total) * 100))}%`;
     }
   }
@@ -899,10 +964,17 @@ export class App {
   private sellSelected(): void {
     const game = this.game;
     if (!game || this.selectedTower === null) return;
+    const tower = game.towerById(this.selectedTower);
+    const blocked = tower ? game.canSell(tower) : null;
+    if (blocked) {
+      this.toast(this.t.placeErrors[blocked]);
+      return;
+    }
     if (game.sell(this.selectedTower)) {
       this.ghostCache = null;
       this.flush();
       this.selectTower(null);
+      this.canvas.focus({ preventScroll: true });
     }
   }
 
@@ -1047,7 +1119,7 @@ export class App {
   }
 
   private globalKey(e: KeyboardEvent): void {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     if (this.dialogKind) {
       if (e.key === 'Escape' && this.dialogKind !== 'result') {
         e.preventDefault();

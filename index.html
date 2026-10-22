@@ -15,7 +15,7 @@
   <body>
     <div class="app" id="app">
       <header class="topbar">
-        <button type="button" class="brand" id="home" data-i18n-title="menu">
+        <button type="button" class="brand" id="home">
           <img src="/src/assets/brand/mark.svg" alt="" width="22" height="22" />
           <span class="brand-title">Relay Defense</span>
         </button>
@@ -33,11 +33,13 @@
           ></span>
         </div>
         <div class="controls" id="controls" hidden>
-          <button type="button" class="btn btn-ghost" id="speed" aria-live="polite"></button>
+          <button type="button" class="btn btn-ghost" id="speed"></button>
           <button type="button" class="btn btn-ghost" id="pause"></button>
           <button type="button" class="btn btn-ghost" id="restart" data-i18n="restart"></button>
         </div>
-        <button type="button" class="btn btn-ghost" id="help-open" data-i18n="help"></button>
+        <button type="button" class="btn btn-ghost btn-icon" id="help-open">
+          <span aria-hidden="true">?</span>
+        </button>
         <div class="lang-switch" role="group" id="lang-switch">
           <button type="button" data-lang="en" lang="en">EN</button>
           <button type="button" data-lang="pl" lang="pl">PL</button>
@@ -69,7 +71,7 @@
               <h2 class="panel-title" data-i18n="build"></h2>
               <div class="palette" id="palette"></div>
             </section>
-            <section class="panel panel-info" id="info" aria-live="polite"></section>
+            <section class="panel panel-info" id="info"></section>
             <section class="panel panel-waves">
               <div class="wave-head">
                 <h2 class="panel-title" id="wave-title"></h2>

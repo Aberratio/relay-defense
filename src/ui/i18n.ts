@@ -46,13 +46,12 @@ const en = {
     ['arrows, Enter', 'move the cursor, build or select'],
     ['Space', 'start the wave / pause'],
     ['U, S, T', 'upgrade, sell, change the target'],
+    ['P', 'pause'],
     ['F', 'game speed'],
     ['Esc', 'cancel'],
   ] as [string, string][],
   levels: 'Levels',
-  play: 'Play',
   replay: 'Play again',
-  best: 'Best',
   notPlayed: 'not played yet',
   starsLabel: (n: number) => `${n} of 3 stars`,
   starsRule: '3 stars: no leaks. 2 stars: at least half the core left.',
@@ -101,6 +100,7 @@ const en = {
   hp: 'Hit points',
   speedStat: 'Speed',
   armour: 'Armour',
+  ignoresArmour: 'ignored',
   leak: 'Core damage',
   bounty: 'Bounty',
   selectHint: 'Pick an agent to build, or click one on the board.',
@@ -119,11 +119,11 @@ const en = {
   placeErrors: {
     tile: 'Agents go on sockets and open floor; walls only on floor.',
     occupied: 'This tile is taken.',
-    enemy: 'A fault is standing there.',
     blocks: 'That would cut the core off. Leave the faults a way through.',
     funds: 'Not enough credits.',
     locked: 'Not available in this level.',
     over: 'The level is over.',
+    wave: 'The maze on open floor changes only between waves. Sockets stay open.',
   } satisfies Record<PlaceError, string>,
   traits: {
     armour: (n: number) => `armour ${n}`,
@@ -163,7 +163,6 @@ const en = {
     S: 'gate',
     C: 'core',
   } as Record<string, string>,
-  footer: 'Relay Defense · open source',
   source: 'Source code',
   towers: {
     pulse: { name: 'Pulse', text: 'Cheap and steady single-target fire. Armour shrugs it off.' },
@@ -268,6 +267,12 @@ const en = {
 
 export type Strings = typeof en;
 
+/** A number with the plural form a language picks for it: forms for "one", "few" and "many". */
+function plural(n: number, lang: Lang, forms: [string, string, string]): string {
+  const form = new Intl.PluralRules(lang).select(n);
+  return `${n} ${form === 'one' ? forms[0] : form === 'few' ? forms[1] : forms[2]}`;
+}
+
 const pl: Strings = {
   title: 'Relay Defense',
   tagline: 'Gra typu tower defense, w której plan wygrywa z refleksem.',
@@ -286,14 +291,13 @@ const pl: Strings = {
     ['strzałki, Enter', 'kursor, budowa lub wybór'],
     ['Spacja', 'start fali / pauza'],
     ['U, S, T', 'ulepsz, sprzedaj, zmień cel'],
+    ['P', 'pauza'],
     ['F', 'prędkość gry'],
     ['Esc', 'anuluj'],
   ],
   levels: 'Poziomy',
-  play: 'Graj',
   replay: 'Zagraj ponownie',
-  best: 'Rekord',
-  notPlayed: 'jeszcze nie grany',
+  notPlayed: 'jeszcze nierozegrany',
   starsLabel: (n) => `${n} z 3 gwiazdek`,
   starsRule: '3 gwiazdki: bez przecieków. 2 gwiazdki: co najmniej połowa rdzenia.',
   lives: 'Rdzeń',
@@ -341,6 +345,7 @@ const pl: Strings = {
   hp: 'Wytrzymałość',
   speedStat: 'Prędkość',
   armour: 'Pancerz',
+  ignoresArmour: 'ignorowany',
   leak: 'Uszkodzenie rdzenia',
   bounty: 'Nagroda',
   selectHint: 'Wybierz agenta do zbudowania albo kliknij agenta na planszy.',
@@ -359,11 +364,11 @@ const pl: Strings = {
   placeErrors: {
     tile: 'Agenci stoją na gniazdach i posadzce; mury tylko na posadzce.',
     occupied: 'To pole jest zajęte.',
-    enemy: 'Na tym polu stoi usterka.',
     blocks: 'To odcięłoby rdzeń. Zostaw usterkom przejście.',
     funds: 'Za mało kredytów.',
     locked: 'Niedostępne w tym poziomie.',
     over: 'Poziom jest zakończony.',
+    wave: 'Labirynt na posadzce zmienia się tylko między falami. Gniazda są dostępne zawsze.',
   },
   traits: {
     armour: (n) => `pancerz ${n}`,
@@ -385,12 +390,13 @@ const pl: Strings = {
   allDone: 'Wszystkie poziomy ukończone. Dziękuję za grę.',
   boardLabel: 'Plansza gry. Strzałki przesuwają kursor, Enter buduje albo wybiera agenta.',
   announce: {
-    waveStart: (n) => `Fala ${n} wystartowała.`,
-    waveClear: (n, bonus) => `Fala ${n} odparta. Premia ${bonus} kredytów.`,
+    waveStart: (n) => `Fala ${n} rozpoczęła się.`,
+    waveClear: (n, bonus) =>
+      `Fala ${n} odparta. Premia: ${plural(bonus, 'pl', ['kredyt', 'kredyty', 'kredytów'])}.`,
     leak: (lives) => `Usterka dotarła do rdzenia. Zostało ${lives}.`,
     built: (name) => `Zbudowano: ${name}.`,
     upgraded: (name, level) => `${name}: poziom ${level}.`,
-    sold: (credits) => `Sprzedano za ${credits} kredytów.`,
+    sold: (n) => `Sprzedano za ${plural(n, 'pl', ['kredyt', 'kredyty', 'kredytów'])}.`,
     cursor: (x, y, what) => `Kolumna ${x + 1}, wiersz ${y + 1}: ${what}.`,
   },
   tiles: {
@@ -401,13 +407,12 @@ const pl: Strings = {
     S: 'brama',
     C: 'rdzeń',
   },
-  footer: 'Relay Defense · open source',
   source: 'Kod źródłowy',
   towers: {
     pulse: { name: 'Puls', text: 'Tani, równy ogień w jeden cel. Pancerz prawie go nie czuje.' },
     arc: {
       name: 'Łuk',
-      text: 'Wyładowanie skacze między usterkami, które idą blisko siebie. Stworzony na roje.',
+      text: 'Wyładowanie skacze między usterkami, które idą blisko siebie. Stworzony do walki z rojami.',
     },
     lance: {
       name: 'Lanca',
@@ -415,7 +420,7 @@ const pl: Strings = {
     },
     mortar: {
       name: 'Moździerz',
-      text: 'Wystrzeliwuje pocisk z wyprzedzeniem i rani obszar. Nie strzela do usterek tuż obok siebie.',
+      text: 'Wystrzeliwuje pocisk z wyprzedzeniem i razi cały obszar. Nie strzela do usterek tuż obok siebie.',
     },
     throttle: {
       name: 'Dławik',
@@ -441,7 +446,7 @@ const pl: Strings = {
     splitter: { name: 'Dzielnik', text: 'Po zniszczeniu rozpada się na trzy Pchły.' },
     mender: {
       name: 'Medyk',
-      text: 'Naprawia usterki wokół siebie. Potrzebny jest skupiony ogień albo eliminacja go w pierwszej kolejności.',
+      text: 'Naprawia usterki wokół siebie. Potrzebny jest skupiony ogień albo wyeliminowanie go w pierwszej kolejności.',
     },
     colossus: {
       name: 'Kolos',
@@ -452,7 +457,7 @@ const pl: Strings = {
     handshake: {
       name: 'Uzgadnianie',
       brief: 'Jeden tor, jeden rodzaj usterek. Znajdź pola, które pokrywają tor więcej niż raz.',
-      focus: 'Agenci Puls. Gniazdo przy zakręcie sięga dwóch odcinków toru.',
+      focus: 'Puls: gniazdo przy zakręcie sięga dwóch odcinków toru.',
     },
     'fan-out': {
       name: 'Rozgałęzienie',

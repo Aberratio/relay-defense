@@ -141,7 +141,7 @@ export const LEVELS: LevelDef[] = [
     ],
     credits: 170,
     lives: 20,
-    hpScale: 2.2,
+    hpScale: 2,
     towers: ['pulse', 'arc', 'lance', 'beacon'],
     waveBonus: { base: 25, perWave: 6 },
     waves: [
@@ -169,7 +169,7 @@ export const LEVELS: LevelDef[] = [
     ],
     credits: 190,
     lives: 20,
-    hpScale: 2.5,
+    hpScale: 2.1,
     towers: ['pulse', 'arc', 'lance', 'mortar', 'throttle'],
     waveBonus: { base: 25, perWave: 6 },
     waves: [
