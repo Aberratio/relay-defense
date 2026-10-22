@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0d12" />
+    <meta
+      name="description"
+      content="Relay Defense: a logic tower defense game. Build mazes, read the waves, pick the right counter."
+    />
+    <title>Relay Defense</title>
+    <link rel="icon" href="/src/assets/brand/mark.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="topbar">
+        <button type="button" class="brand" id="home" data-i18n-title="menu">
+          <img src="/src/assets/brand/mark.svg" alt="" width="22" height="22" />
+          <span class="brand-title">Relay Defense</span>
+        </button>
+        <span class="level-name" id="level-name"></span>
+        <span class="spacer"></span>
+        <div class="stats" id="stats" hidden>
+          <span class="stat stat-lives" id="stat-lives"
+            ><span class="stat-label" data-i18n="lives"></span><span class="stat-value"></span
+          ></span>
+          <span class="stat stat-credits" id="stat-credits"
+            ><span class="stat-label" data-i18n="credits"></span><span class="stat-value"></span
+          ></span>
+          <span class="stat stat-wave" id="stat-wave"
+            ><span class="stat-label" data-i18n="wave"></span><span class="stat-value"></span
+          ></span>
+        </div>
+        <div class="controls" id="controls" hidden>
+          <button type="button" class="btn btn-ghost" id="speed" aria-live="polite"></button>
+          <button type="button" class="btn btn-ghost" id="pause"></button>
+          <button type="button" class="btn btn-ghost" id="restart" data-i18n="restart"></button>
+        </div>
+        <button type="button" class="btn btn-ghost" id="help-open" data-i18n="help"></button>
+        <div class="lang-switch" role="group" id="lang-switch">
+          <button type="button" data-lang="en" lang="en">EN</button>
+          <button type="button" data-lang="pl" lang="pl">PL</button>
+        </div>
+      </header>
+
+      <main class="screen screen-menu" id="menu">
+        <section class="hero">
+          <h1 data-i18n="title"></h1>
+          <p class="tagline" data-i18n="tagline"></p>
+          <p class="intro" data-i18n="intro"></p>
+        </section>
+        <section class="level-grid" aria-labelledby="levels-title">
+          <h2 id="levels-title" data-i18n="levels"></h2>
+          <p class="stars-rule" data-i18n="starsRule"></p>
+          <ol class="levels" id="levels"></ol>
+        </section>
+      </main>
+
+      <main class="screen screen-game" id="game" hidden>
+        <div class="board-wrap" id="board-wrap">
+          <canvas class="board" id="board" tabindex="0" role="application"></canvas>
+          <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+          <div class="paused-badge" id="paused-badge" hidden></div>
+        </div>
+        <aside class="side" id="side">
+          <div class="side-inner">
+            <section class="panel panel-build">
+              <h2 class="panel-title" data-i18n="build"></h2>
+              <div class="palette" id="palette"></div>
+            </section>
+            <section class="panel panel-info" id="info" aria-live="polite"></section>
+            <section class="panel panel-waves">
+              <div class="wave-head">
+                <h2 class="panel-title" id="wave-title"></h2>
+                <button type="button" class="btn btn-primary" id="start-wave"></button>
+              </div>
+              <div class="wave-progress" id="wave-progress" hidden><span></span></div>
+              <ul class="wave-next" id="wave-next"></ul>
+              <h3 class="panel-subtitle" id="later-title" data-i18n="laterWaves"></h3>
+              <ol class="wave-later" id="wave-later"></ol>
+            </section>
+          </div>
+        </aside>
+      </main>
+
+      <div class="overlay" id="overlay" hidden>
+        <div
+          class="dialog"
+          id="dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dialog-title"
+        ></div>
+      </div>
+      <p class="visually-hidden" id="announcer" aria-live="polite"></p>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
