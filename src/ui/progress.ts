@@ -1,5 +1,7 @@
 // Best result per level, kept in the browser. Storage can be missing or blocked (private mode,
 // a sandboxed frame), so every access is guarded and the game works without it.
+import { TARGET_MODES, TOWER_KINDS, type Carry } from '../engine/types';
+
 const KEY = 'relay-defense:progress:v1';
 
 export type Progress = Record<string, number>;
@@ -47,4 +49,79 @@ function safeStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+// ---- Siege ----------------------------------------------------------------------------------
+
+const SIEGE_KEY = 'relay-defense:siege:v1';
+
+/**
+ * Siege progress: the best stars per chapter and the checkpoint, the gold and defenders the next
+ * chapter starts from. The checkpoint belongs to one version of the campaign; when the campaign
+ * changes, an older checkpoint is dropped and the stars stay.
+ */
+export interface SiegeSave {
+  stars: number[];
+  checkpoint: { version: number; chapter: number; carry: Carry } | null;
+}
+
+export function loadSiege(
+  version: number,
+  chapters: number,
+  storage: Pick<Storage, 'getItem'> | null = safeStorage(),
+): SiegeSave {
+  const empty: SiegeSave = { stars: [], checkpoint: null };
+  try {
+    const raw = storage?.getItem(SIEGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (!isRecord(parsed)) return empty;
+    const stars = Array.isArray(parsed.stars)
+      ? parsed.stars
+          .slice(0, chapters)
+          .map((s) => (typeof s === 'number' && s >= 0 && s <= 3 ? Math.floor(s) : 0))
+      : [];
+    const cp = parsed.checkpoint;
+    const checkpoint =
+      isRecord(cp) &&
+      cp.version === version &&
+      typeof cp.chapter === 'number' &&
+      Number.isInteger(cp.chapter) &&
+      cp.chapter >= 0 &&
+      cp.chapter < chapters &&
+      isCarry(cp.carry)
+        ? { version, chapter: cp.chapter, carry: cp.carry }
+        : null;
+    return { stars, checkpoint };
+  } catch {
+    return empty;
+  }
+}
+
+export function saveSiege(
+  save: SiegeSave,
+  storage: Pick<Storage, 'setItem'> | null = safeStorage(),
+): void {
+  try {
+    storage?.setItem(SIEGE_KEY, JSON.stringify(save));
+  } catch {
+    // Storage is full or blocked: the campaign still runs for this session.
+  }
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function isCarry(v: unknown): v is Carry {
+  if (!isRecord(v) || typeof v.credits !== 'number' || !Number.isFinite(v.credits)) return false;
+  if (!Array.isArray(v.towers)) return false;
+  return v.towers.every(
+    (t) =>
+      isRecord(t) &&
+      (TOWER_KINDS as readonly unknown[]).includes(t.kind) &&
+      (TARGET_MODES as readonly unknown[]).includes(t.mode) &&
+      typeof t.x === 'number' &&
+      typeof t.y === 'number' &&
+      typeof t.level === 'number',
+  );
 }

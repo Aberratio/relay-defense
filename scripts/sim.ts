@@ -5,6 +5,8 @@
 import { tileAt } from '../src/engine/grid';
 import { replay } from '../src/engine/replay';
 import { LEVELS, levelById } from '../src/levels/levels';
+import { chapterById } from '../src/levels/siege';
+import { SIEGE_FLOOR } from '../tests/siege-solutions';
 import { SOLUTIONS } from '../tests/solutions';
 
 const GLYPH: Record<string, string> = {
@@ -19,8 +21,8 @@ const GLYPH: Record<string, string> = {
 
 const ids = process.argv.slice(2);
 for (const id of ids.length ? ids : LEVELS.map((l) => l.id)) {
-  const level = levelById(id);
-  const solution = SOLUTIONS.find((s) => s.level === id);
+  const level = levelById(id) ?? chapterById(id);
+  const solution = [...SOLUTIONS, ...SIEGE_FLOOR].find((s) => s.level === id);
   if (!level || !solution) {
     console.error(`no level or solution "${id}"`);
     process.exitCode = 1;

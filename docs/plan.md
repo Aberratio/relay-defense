@@ -46,3 +46,4 @@ core.
 | 10  | Screenshots, README, public repository, green CI                       | CI green on GitHub                               |
 | 11  | kokot.it: case study PL/EN, lock entry, synced build, tests            | site tests and build pass                        |
 | 12  | Fresh-session review, merge, production deploy on Vercel               | the page is live on kokot.it                     |
+| 13  | Siege: five chapters on one map, carried defence, hardships, proofs    | floor and chain solutions win in a test          |

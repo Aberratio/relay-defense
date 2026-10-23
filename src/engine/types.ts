@@ -73,6 +73,41 @@ export interface LevelDef {
   waves: Wave[];
   /** Credits paid when a wave is cleared: `base + perWave * waveIndex`. */
   waveBonus: { base: number; perWave: number };
+  /** Siege chapters only: what makes this chapter harder, and what is coming later. */
+  hazards?: Hazards;
+}
+
+/**
+ * The hardships of a Siege chapter. Everything that will change later in the campaign is on the
+ * board from the start, so nothing is hidden and the placement rule can keep it fair.
+ */
+export interface Hazards {
+  /** Spawns (by index) that send nothing yet. They count for the placement rule all the same. */
+  dormant?: number[];
+  /**
+   * Lane cells that collapse into rock in a later chapter. A placement is refused when it would
+   * leave a spawn cut off from the core once they are gone.
+   */
+  cracked?: Cell[];
+  /** Cells under fog: a tower standing on one reaches only `FOG_RANGE` of its range. */
+  fog?: Cell[];
+  /** Added to the armour of every enemy. */
+  armour?: number;
+}
+
+/** A defender carried into the next Siege chapter. */
+export interface CarriedTower {
+  kind: TowerKind;
+  x: number;
+  y: number;
+  level: number;
+  mode: TargetMode;
+}
+
+/** What one Siege chapter hands to the next: the gold and the defenders on the board. */
+export interface Carry {
+  credits: number;
+  towers: CarriedTower[];
 }
 
 export type Phase = 'build' | 'wave' | 'won' | 'lost';

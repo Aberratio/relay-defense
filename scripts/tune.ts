@@ -6,11 +6,13 @@ import { carelessWinRate } from '../src/engine/probe';
 import { replay } from '../src/engine/replay';
 import type { LevelDef } from '../src/engine/types';
 import { levelById } from '../src/levels/levels';
+import { chapterById } from '../src/levels/siege';
+import { SIEGE_FLOOR } from '../tests/siege-solutions';
 import { SOLUTIONS } from '../tests/solutions';
 
 const [id = '', scalesArg = '1,1.2,1.4,1.6,1.8,2'] = process.argv.slice(2);
-const level = levelById(id);
-const solution = SOLUTIONS.find((s) => s.level === id);
+const level = levelById(id) ?? chapterById(id);
+const solution = [...SOLUTIONS, ...SIEGE_FLOOR].find((s) => s.level === id);
 if (!level) throw new Error(`no level "${id}"`);
 
 function scaled(l: LevelDef, k: number): LevelDef {

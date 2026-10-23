@@ -1,5 +1,5 @@
 import { Game } from './game';
-import type { LevelDef, TargetMode, TowerKind } from './types';
+import type { Carry, LevelDef, TargetMode, TowerKind } from './types';
 
 /**
  * A scripted plan: the actions taken in the build phase before each wave. Coordinates are map
@@ -58,7 +58,33 @@ export function apply(game: Game, action: Action): boolean {
 
 /** Plays a whole level headless: the actions of each build phase, then the wave to its end. */
 export function replay(level: LevelDef, solution: Solution, maxTicks = 30 * 60 * 30): ReplayResult {
-  const game = new Game(level);
+  return play(new Game(level), solution, maxTicks);
+}
+
+/**
+ * Plays Siege chapters one after another: each starts from what the one before left (its gold and
+ * defenders) and runs its own solution on top. Stops at the first lost chapter.
+ */
+export function replayChain(
+  levels: LevelDef[],
+  solutions: Solution[],
+  maxTicks = 30 * 60 * 30,
+): ReplayResult[] {
+  const out: ReplayResult[] = [];
+  let carry: Carry | null = null;
+  levels.forEach((level, i) => {
+    if (out.some((r) => r.outcome === 'lost')) return;
+    const game = carry ? Game.resume(level, carry) : new Game(level);
+    const result = play(game, solutions[i] ?? { level: level.id, waves: [] }, maxTicks);
+    carry = result.game.carry();
+    out.push(result);
+  });
+  return out;
+}
+
+/** Plays a game from its current build phase to the end with a solution. */
+export function play(game: Game, solution: Solution, maxTicks = 30 * 60 * 30): ReplayResult {
+  const level = game.level;
   const waves: WaveReport[] = [];
   const rejected: string[] = [];
   let ticks = 0;

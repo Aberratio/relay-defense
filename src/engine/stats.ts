@@ -7,6 +7,9 @@ export const DT = 1 / TICK_RATE;
 /** Share of the invested credits returned on a sale (an undo in the same build phase returns all). */
 export const SELL_REFUND = 0.7;
 
+/** Share of its range a tower keeps when it stands in fog (Siege). */
+export const FOG_RANGE = 0.7;
+
 /** Armour never reduces a hit below this share of its damage. */
 export const ARMOUR_FLOOR = 0.25;
 

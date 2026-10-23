@@ -11,8 +11,19 @@ import {
   route,
   tileAt,
 } from './grid';
-import { DT, ENEMIES, SELL_REFUND, TICK_RATE, TOWERS, afterArmour, type TowerLevel } from './stats';
+import {
+  DT,
+  ENEMIES,
+  FOG_RANGE,
+  SELL_REFUND,
+  TICK_RATE,
+  TOWERS,
+  afterArmour,
+  invested,
+  type TowerLevel,
+} from './stats';
 import type {
+  Carry,
   Cell,
   EnemyKind,
   LevelDef,
@@ -149,6 +160,12 @@ export class Game {
   private schedule: Scheduled[] = [];
   private scheduleAt = 0;
   private waveTick = 0;
+  /** Cells of lanes that collapse later in the campaign (Siege), as grid indices. */
+  private cracked: number[];
+  /** Cells under fog (Siege), as grid indices. */
+  private fogged: Set<number>;
+  /** Armour every enemy gets on top of its own (Siege). */
+  private extraArmour: number;
 
   constructor(level: LevelDef) {
     this.level = level;
@@ -156,12 +173,104 @@ export class Game {
     this.credits = level.credits;
     this.lives = level.lives;
     this.maxLives = level.lives;
+    const at = (c: Cell) => index(this.grid, c.x, c.y);
+    this.cracked = (level.hazards?.cracked ?? []).map(at);
+    this.fogged = new Set((level.hazards?.fog ?? []).map(at));
+    this.extraArmour = level.hazards?.armour ?? 0;
     this.blocked = new Array<boolean>(this.grid.width * this.grid.height).fill(false);
     this.dist = flowField(this.grid, this.blocked);
-    for (const spawn of this.grid.spawns) {
-      if (this.distAt(spawn) === UNREACHABLE)
-        throw new Error(`${level.id}: a spawn cannot reach the core`);
+    if (!this.connected(this.blocked))
+      throw new Error(`${level.id}: a spawn cannot reach the core`);
+  }
+
+  /**
+   * Starts a Siege chapter with the gold and the defenders carried over from the chapter before.
+   * The defenders count as bought in this build phase, so they sell back at full value and the
+   * whole layout can be reworked before the first wave. When the gold and the defenders together
+   * are worth less than the chapter's `credits`, the gold is topped up to that floor: whatever
+   * the player brings, the chapter can be won the way it can be won from an empty board.
+   */
+  static resume(level: LevelDef, carry: Carry): Game {
+    const game = new Game(level);
+    let value = 0;
+    for (const c of carry.towers) {
+      const spec = TOWERS[c.kind];
+      const tile = tileAt(game.grid, c.x, c.y);
+      const fits =
+        level.towers.includes(c.kind) &&
+        isBuildableTile(tile) &&
+        (c.kind !== 'wall' || tile === '.') &&
+        !game.towerAt(c.x, c.y) &&
+        Number.isInteger(c.level) &&
+        c.level >= 0 &&
+        c.level < spec.levels.length;
+      if (!fits) throw new Error(`${level.id}: cannot carry ${c.kind} to ${c.x},${c.y}`);
+      const cost = invested(c.kind, c.level);
+      game.towers.push({
+        id: game.nextId++,
+        kind: c.kind,
+        x: c.x,
+        y: c.y,
+        level: c.level,
+        mode: c.mode,
+        cooldown: 0,
+        angle: -Math.PI / 2,
+        lockedCredits: 0,
+        freshCredits: cost,
+        damageDealt: 0,
+        kills: 0,
+      });
+      value += cost;
+      if (isWalkableTile(tile)) game.blocked[index(game.grid, c.x, c.y)] = true;
     }
+    if (!game.connected(game.blocked))
+      throw new Error(`${level.id}: the carried defenders cut a spawn off`);
+    game.dist = flowField(game.grid, game.blocked);
+    game.credits = Math.max(Math.floor(carry.credits), level.credits - value);
+    game.stats.spent = value;
+    return game;
+  }
+
+  /** The gold and the defenders, to carry into the next Siege chapter. */
+  carry(): Carry {
+    return {
+      credits: this.credits,
+      towers: this.towers.map((t) => ({
+        kind: t.kind,
+        x: t.x,
+        y: t.y,
+        level: t.level,
+        mode: t.mode,
+      })),
+    };
+  }
+
+  /** Whether a spawn (by index) sends nothing in this chapter yet (Siege). */
+  dormant(spawn: number): boolean {
+    return this.level.hazards?.dormant?.includes(spawn) ?? false;
+  }
+
+  /** Whether a cell is under fog (Siege). */
+  foggy(x: number, y: number): boolean {
+    return this.fogged.has(index(this.grid, x, y));
+  }
+
+  /** Whether a lane cell collapses later in the campaign (Siege). */
+  isCracked(x: number, y: number): boolean {
+    return this.cracked.includes(index(this.grid, x, y));
+  }
+
+  /**
+   * True when every spawn, dormant ones included, reaches the core with the `blocked` cells taken,
+   * both now and once the cracked lanes have collapsed.
+   */
+  private connected(blocked: boolean[]): boolean {
+    const later = [...blocked];
+    for (const i of this.cracked) later[i] = true;
+    const dist = flowField(this.grid, later);
+    return this.grid.spawns.every(
+      (c) => (dist[index(this.grid, c.x, c.y)] ?? UNREACHABLE) !== UNREACHABLE,
+    );
   }
 
   /** An independent copy of the whole state, for look-ahead search. */
@@ -247,10 +356,7 @@ export class Game {
     if (isWalkableTile(tile)) {
       const blocked = [...this.blocked];
       blocked[index(this.grid, x, y)] = true;
-      const dist = flowField(this.grid, blocked);
-      const reaches = (c: Cell) =>
-        (dist[index(this.grid, c.x, c.y)] ?? UNREACHABLE) !== UNREACHABLE;
-      if (!this.grid.spawns.every(reaches)) return 'blocks';
+      if (!this.connected(blocked)) return 'blocks';
     }
     return null;
   }
@@ -554,9 +660,16 @@ export class Game {
     return { x: body.x, y: body.y };
   }
 
+  /** The tower's numbers at its level; in fog its range is cut to `FOG_RANGE`. */
   stat(t: Tower): TowerLevel {
     const levels = TOWERS[t.kind].levels;
-    return levels[t.level] ?? levels[0];
+    const l = levels[t.level] ?? levels[0];
+    return this.fogged.size && this.foggy(t.x, t.y) ? { ...l, range: l.range * FOG_RANGE } : l;
+  }
+
+  /** An enemy's armour in this level (Siege chapters may add to it). */
+  armourOf(kind: EnemyKind): number {
+    return ENEMIES[kind].armour + this.extraArmour;
   }
 
   /** Damage bonus from Beacons on the 8 neighbouring cells; several Beacons add up. */
@@ -755,7 +868,7 @@ export class Game {
     if (e.dead) return;
     const spec = ENEMIES[e.kind];
     const pierce = tower ? Boolean(TOWERS[tower.kind].pierceArmour) : false;
-    const dealt = Math.min(e.hp, afterArmour(raw, spec.armour + e.shield, pierce));
+    const dealt = Math.min(e.hp, afterArmour(raw, this.armourOf(e.kind) + e.shield, pierce));
     e.hp -= dealt;
     if (tower) tower.damageDealt += dealt;
     this.events.push({

@@ -2,6 +2,7 @@
 // stone circles on the sockets, dirt paths along the lanes and dark rock everywhere else. These
 // colours belong to the game world only; the interface around the board keeps the brand palette.
 import { tileAt, type Grid } from '../engine/grid';
+import type { Cell } from '../engine/types';
 
 const TERRAIN = {
   forest: '#141d10',
@@ -21,6 +22,9 @@ const TERRAIN = {
   path: '#7a5a36',
   pathLight: '#8d6c45',
   pebble: '#a58b65',
+  crack: '#21160c',
+  fog: 'rgba(214, 222, 232, 0.2)',
+  fogEdge: 'rgba(214, 222, 232, 0)',
 } as const;
 
 /** A repeatable pseudo-random number in [0, 1) for a tile and a salt. */
@@ -211,6 +215,70 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
         );
         ctx.fill();
       }
+    }
+  }
+}
+
+/**
+ * Siege marks on the ground: lanes that will collapse (a cracked dirt crossing) and the fog (a
+ * pale mist over its tiles). Painted into the background layer after the terrain.
+ */
+export function paintHazards(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  hazards: { cracked: Cell[]; fog: Cell[] },
+): void {
+  for (const { x, y } of hazards.cracked) {
+    const cx = (x + 0.5) * s;
+    const cy = (y + 0.5) * s;
+    ctx.fillStyle = TERRAIN.pathEdge;
+    ctx.fillRect(x * s, y * s + s * 0.07, s, s * 0.86);
+    ctx.fillStyle = TERRAIN.path;
+    ctx.fillRect(x * s, y * s + s * 0.13, s, s * 0.74);
+    // Cracks: a jagged line across the crossing and two branches.
+    ctx.strokeStyle = TERRAIN.crack;
+    ctx.lineWidth = Math.max(1.2, s * 0.045);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.32, cy - s * 0.3);
+    ctx.lineTo(cx - s * 0.1, cy - s * 0.08);
+    ctx.lineTo(cx - s * 0.16, cy + s * 0.1);
+    ctx.lineTo(cx + s * 0.08, cy + s * 0.22);
+    ctx.lineTo(cx + s * 0.3, cy + s * 0.34);
+    ctx.moveTo(cx - s * 0.1, cy - s * 0.08);
+    ctx.lineTo(cx + s * 0.2, cy - s * 0.18);
+    ctx.moveTo(cx - s * 0.16, cy + s * 0.1);
+    ctx.lineTo(cx - s * 0.36, cy + s * 0.2);
+    ctx.stroke();
+    ctx.fillStyle = TERRAIN.rockLight;
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      ctx.ellipse(
+        (x + 0.15 + hash(x, y, 70 + k) * 0.7) * s,
+        (y + 0.2 + hash(x, y, 74 + k) * 0.6) * s,
+        s * 0.05,
+        s * 0.035,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+  }
+  // Fog: soft overlapping puffs, so the patch reads as one bank of mist, not as tiles.
+  for (const { x, y } of hazards.fog) {
+    for (let k = 0; k < 3; k++) {
+      const px = (x + 0.15 + hash(x, y, 80 + k) * 0.7) * s;
+      const py = (y + 0.15 + hash(x, y, 83 + k) * 0.7) * s;
+      const r = s * (0.55 + hash(x, y, 86 + k) * 0.25);
+      const g = ctx.createRadialGradient(px, py, 0, px, py, r);
+      g.addColorStop(0, TERRAIN.fog);
+      g.addColorStop(1, TERRAIN.fogEdge);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 }

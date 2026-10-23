@@ -15,6 +15,7 @@ new App({
   embed,
   reducedMotion,
   startLevel: params.get('level') ?? undefined,
+  startSiege: params.get('mode') === 'siege',
 }).start();
 
 if (embed) reportHeightToParent();

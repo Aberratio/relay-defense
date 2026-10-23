@@ -3,7 +3,8 @@
 A tower defense game that rewards a plan over reflexes. Monsters pour out of the portals towards
 the Heart Tree; you place defenders (archers, druids, unicorns, ents, dryads, lantern fairies and
 thorn hedges), read every wave before it starts and pick the right answer to each threat. Ten
-levels, each built around one idea, every one of them proven winnable in CI.
+levels, each built around one idea, and a five-chapter Siege on one map where the defence carries
+over and every chapter adds a hardship. Every level and every chapter is proven winnable in CI.
 
 ![Two Fronts: two portals, a maze of thorn hedges on the meadow, unicorn beams through a column of trolls](docs/screenshots/two-fronts-en.png)
 
@@ -52,6 +53,34 @@ core, portals are gates, gold is credits, stone circles are sockets and paths ar
 Each defender except Thorns has three levels (a gold ring and a banner at level 2, a halo at
 level 3) and four targeting modes (first, last, strongest, weakest).
 
+## Siege
+
+A separate mode next to the ten levels: one meadow split by a ridge, five chapters of four waves.
+The defenders, their upgrades and the gold carry over from chapter to chapter, and each chapter
+adds a hardship:
+
+| Chapter       | What changes                                                               |
+| ------------- | -------------------------------------------------------------------------- |
+| Awakening     | one portal; the pass through the ridge is cracked, a second portal sleeps  |
+| Second Portal | the portal on the southern edge wakes                                      |
+| Landslide     | the pass collapses into rock and the western route goes round to the south |
+| Fog           | fog over the south-east: defenders standing in it keep 70% of their range  |
+| The Warlord   | the Ogre Warlord comes, and every monster gains 2 armour                   |
+
+- **Nothing is hidden here either.** The sleeping portal and the cracked pass are on the board
+  from the first chapter, the briefing names what the next chapter brings, and the placement rule
+  already counts them: a maze may not seal the sleeping portal in, nor depend on the pass.
+- **A defeat restarts the chapter** from its checkpoint: the gold and defenders it began with.
+- **Every checkpoint can be won.** Before the first wave of a chapter, every defender brought into
+  it sells back at full value, and when the gold and the defenders together are worth less than
+  the chapter's floor, the Heart Tree tops the gold up to it. A player can always sell everything
+  and rebuild the floor solution, so proving each chapter from an empty board and its floor gold
+  proves every checkpoint.
+- Progress (stars per chapter and the checkpoint) is kept in the browser under its own key, with
+  the campaign's version: a checkpoint from an older balance is dropped, the stars stay.
+
+![Siege, chapter 4: fog over the south-east, the defence carried over from the first three chapters](docs/screenshots/siege-en.png)
+
 ## How the levels are balanced
 
 Balancing a puzzle by hand is guesswork, so the repository carries its own tools:
@@ -65,6 +94,10 @@ Balancing a puzzle by hand is guesswork, so the repository carries its own tools
   agents near the route and upgrades at random. From the third level on it wins at most 15% of
   the time (a test holds that line); in 300 runs per level it
   wins 3% of the third level and at most 1% of any later one.
+- **The Siege proofs** (`tests/siege-solutions.ts`): one solver solution per chapter from its
+  floor (`npm run solve -- siege-<n>`), and one run of the whole campaign that carries its
+  defence from chapter to chapter (`npm run solve -- siege`). The careless player gets at most
+  15% of any chapter from its floor, too.
 - **A tuning table** (`npm run tune -- <level>`): solver result and careless win rate across a
   range of enemy strength. Each level ships at 50–90% of the strength the solver can still beat,
   lower for the tutorial levels and closer to the edge for the last ones.
@@ -76,7 +109,8 @@ Balancing a puzzle by hand is guesswork, so the repository carries its own tools
 ```
 src/engine/   pure TypeScript simulation, no DOM: map and flow-field routing, placement rules,
               agents, faults, shots, waves, economy; fixed 30 Hz tick; clone() for look-ahead
-src/levels/   the ten levels: ASCII maps, credits, waves, available agents, difficulty
+src/levels/   the ten levels: ASCII maps, credits, waves, available agents, difficulty; the
+              Siege campaign (siege.ts), turned into one ordinary level per chapter
 src/render/   2D canvas renderer: cached background layer, interpolated movement, effects,
               particles; vector sprites shared with the UI icons; colours from the brand tokens
 src/ui/       menu, briefings, play screen, results, help; input (mouse, touch, keyboard);
@@ -109,7 +143,7 @@ and most particles. On touch screens the first tap previews a placement and the 
 
 `?embed=1&lang=<en|pl>` lays the game out for an iframe: the height follows the width only, and
 the page posts `{ type: 'relay-defense:height', height }` to its parent whenever it changes.
-`?level=<id>` opens a level directly. This is how [kokot.it](https://kokot.it) embeds it.
+`?level=<id>` opens a level directly and `?mode=siege` the Siege at its checkpoint. This is how [kokot.it](https://kokot.it) embeds it.
 
 ## Stack
 
@@ -125,7 +159,7 @@ Prettier. No framework and no runtime dependencies.
 | `npm test`               | unit and level tests                                                  |
 | `npm run lint`           | ESLint and Prettier check                                             |
 | `npm run smoke`          | plays the build in Chromium and checks the embed height (after build) |
-| `npm run solve -- <id>`  | look-ahead solver, prints a solution                                  |
+| `npm run solve -- <id>`  | look-ahead solver, prints a solution (`siege-<n>`, `siege` for Siege) |
 | `npm run sim -- <id>`    | replays the reference solution and prints the board                   |
 | `npm run probe`          | careless-player win rate per level                                    |
 | `npm run tune -- <id>`   | solver and probe across enemy strength                                |

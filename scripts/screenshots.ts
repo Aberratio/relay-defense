@@ -6,8 +6,10 @@
 //   npm run screenshots [-- http://localhost:5391/]
 import { mkdirSync } from 'node:fs';
 import { chromium, type Page } from 'playwright';
-import type { Action } from '../src/engine/replay';
+import { replayChain, type Action, type Solution } from '../src/engine/replay';
 import { LEVELS } from '../src/levels/levels';
+import { SIEGE, SIEGE_CHAPTERS } from '../src/levels/siege';
+import { SIEGE_CHAIN } from '../tests/siege-solutions';
 import { SOLUTIONS } from '../tests/solutions';
 
 const base = process.argv[2] ?? 'http://localhost:5391/';
@@ -22,7 +24,7 @@ async function clickCell(page: Page, x: number, y: number): Promise<void> {
 }
 
 async function perform(page: Page, levelId: string, action: Action): Promise<void> {
-  const level = LEVELS.find((l) => l.id === levelId);
+  const level = [...LEVELS, ...SIEGE_CHAPTERS].find((l) => l.id === levelId);
   if (!level) throw new Error(levelId);
   if (action[0] === 'build') {
     await page.keyboard.press(String(level.towers.indexOf(action[1]) + 1));
@@ -36,8 +38,14 @@ async function perform(page: Page, levelId: string, action: Action): Promise<voi
 }
 
 /** Opens a level, builds the solution up to wave `wave`, starts it and waits `seconds`. */
-async function playTo(page: Page, levelId: string, wave: number, seconds: number): Promise<void> {
-  const solution = SOLUTIONS.find((s) => s.level === levelId);
+async function playTo(
+  page: Page,
+  levelId: string,
+  wave: number,
+  seconds: number,
+  solutions: Solution[] = SOLUTIONS,
+): Promise<void> {
+  const solution = solutions.find((s) => s.level === levelId);
   if (!solution) throw new Error(levelId);
   await page.locator('.dialog .btn-primary').click();
   await page.locator('#speed').click();
@@ -87,6 +95,25 @@ const boss = await open('?lang=en&level=colossus', 1440, 900);
 await playTo(boss, 'colossus', 4, 14);
 await boss.screenshot({ path: `${out}/colossus-en.png` });
 await boss.close();
+
+// Siege, chapter 4: the defence carried over from the reference run of chapters 1 to 3.
+const chain = replayChain(SIEGE_CHAPTERS.slice(0, 3), SIEGE_CHAIN);
+const carry = chain[2]?.game.carry();
+if (!carry) throw new Error('the Siege chain did not reach chapter 4');
+const siege = await open('?lang=en', 1440, 900);
+await siege.evaluate(
+  ([version, c]) =>
+    localStorage.setItem(
+      'relay-defense:siege:v1',
+      JSON.stringify({ stars: [3, 3, 3], checkpoint: { version, chapter: 3, carry: c } }),
+    ),
+  [SIEGE.version, carry] as const,
+);
+await siege.goto(new URL('?lang=en&mode=siege', base).toString());
+await siege.waitForLoadState('networkidle');
+await playTo(siege, 'siege-4', 1, 12, SIEGE_CHAIN);
+await siege.screenshot({ path: `${out}/siege-en.png` });
+await siege.close();
 
 const phone = await open('?lang=pl&level=open-floor', 390, 844, 2);
 await playTo(phone, 'open-floor', 2, 8);
