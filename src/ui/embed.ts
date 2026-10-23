@@ -22,10 +22,11 @@ export function parentOrigin(
 
 /**
  * Reports the document height to the parent page, now and whenever it changes, so the parent can
- * size the iframe. In embed mode the layout height depends only on the frame's width (the board
- * keeps a fixed aspect ratio and the side panel scrolls inside it, see `.embed` in app.css), so
- * the parent resizing the frame to the reported height does not change the height again: there is
- * no resize loop. Repeated values are not re-sent. Returns a function that stops reporting.
+ * size the iframe. In embed mode the layout height depends only on the frame's width and the
+ * content (the board keeps a fixed aspect ratio, nothing uses viewport units, and an open dialog
+ * grows the page instead of scrolling inside it, see `.embed` in app.css), so the parent resizing
+ * the frame to the reported height does not change the height again: there is no resize loop.
+ * Repeated values are not re-sent. Returns a function that stops reporting.
  */
 export function reportHeightToParent(win: Window = window): () => void {
   if (win.parent === win) return () => {};
