@@ -4,7 +4,8 @@
 import type { GameEvent } from '../engine/game';
 import type { Point } from '../engine/types';
 import { alpha, type Palette } from './palette';
-import { enemyColour, glow } from './sprites';
+import { ENEMY_ART, TOWER_ART } from './art';
+import { glow } from './sprites';
 
 interface Particle {
   x: number;
@@ -22,9 +23,20 @@ type Fx =
   | { kind: 'arc'; points: Point[]; age: number; life: number; seed: number }
   | { kind: 'blast'; at: Point; radius: number; age: number; life: number }
   | { kind: 'ring'; at: Point; radius: number; colour: string; age: number; life: number }
-  | { kind: 'text'; at: Point; text: string; colour: string; age: number; life: number };
+  | {
+      kind: 'text';
+      at: Point;
+      text: string;
+      /** Credits shown, for adding up kills that land close together. */
+      value?: number;
+      colour: string;
+      age: number;
+      life: number;
+    };
 
 const MAX_PARTICLES = 600;
+/** Earth thrown up by an Ent's boulder. */
+const DUST = '#b08a5a';
 
 export class Effects {
   private particles: Particle[] = [];
@@ -71,13 +83,26 @@ export class Effects {
     }
   }
 
+  /** Floating credits; kills close together in space and time add up into one number. */
+  private credit(at: Point, value: number): void {
+    for (const f of this.fx) {
+      if (f.kind !== 'text' || f.value === undefined || f.age > 0.25) continue;
+      if (Math.hypot(f.at.x - at.x, f.at.y - at.y) > 1.2) continue;
+      f.value += value;
+      f.text = `+${f.value}`;
+      return;
+    }
+    const colour = this.palette.signal;
+    this.fx.push({ kind: 'text', at, text: `+${value}`, value, colour, age: 0, life: 0.9 });
+  }
+
   handle(events: GameEvent[]): void {
     const p = this.palette;
     for (const e of events) {
       switch (e.type) {
         case 'beam':
           this.fx.push({ kind: 'beam', from: e.from, to: e.to, age: 0, life: 0.3 });
-          for (const h of e.hits) this.burst(h, p.signalSoft, 6, 2.5, 0.05, 0.35);
+          for (const h of e.hits) this.burst(h, TOWER_ART.lance.colour, 6, 2.5, 0.05, 0.35);
           break;
         case 'arc':
           this.fx.push({
@@ -90,16 +115,16 @@ export class Effects {
           break;
         case 'blast':
           this.fx.push({ kind: 'blast', at: e.at, radius: e.radius, age: 0, life: 0.4 });
-          this.burst(e.at, p.signal, 14, 3, 0.06, 0.45);
+          this.burst(e.at, DUST, 14, 3, 0.06, 0.45);
           this.shake = Math.max(this.shake, 0.03);
           break;
         case 'hit':
-          this.burst(e.at, p.signalSoft, 2, 1.6, 0.035, 0.25);
+          this.burst(e.at, p.text, 2, 1.6, 0.035, 0.25);
           break;
         case 'kill':
           this.burst(
             e.at,
-            enemyColour(e.kind, p),
+            ENEMY_ART[e.kind].colour,
             e.kind === 'colossus' ? 60 : 14,
             e.kind === 'colossus' ? 4 : 2.6,
             0.06,
@@ -109,18 +134,11 @@ export class Effects {
             kind: 'ring',
             at: e.at,
             radius: e.kind === 'colossus' ? 1.6 : 0.5,
-            colour: enemyColour(e.kind, p),
+            colour: ENEMY_ART[e.kind].colour,
             age: 0,
             life: 0.35,
           });
-          this.fx.push({
-            kind: 'text',
-            at: e.at,
-            text: `+${e.bounty}`,
-            colour: p.signal,
-            age: 0,
-            life: 0.9,
-          });
+          this.credit(e.at, e.bounty);
           if (e.kind === 'colossus') this.shake = Math.max(this.shake, 0.15);
           break;
         case 'leak':
@@ -143,7 +161,7 @@ export class Effects {
             kind: 'ring',
             at: { x: e.at.x + 0.5, y: e.at.y + 0.5 },
             radius: 0.8,
-            colour: p.signal,
+            colour: p.success,
             age: 0,
             life: 0.4,
           });
@@ -213,7 +231,7 @@ export class Effects {
       const k = 1 - f.age / f.life;
       switch (f.kind) {
         case 'beam': {
-          ctx.strokeStyle = alpha(p.signal, 0.35 * k);
+          ctx.strokeStyle = alpha(TOWER_ART.lance.colour, 0.45 * k);
           ctx.lineWidth = s * 0.32 * k;
           ctx.beginPath();
           ctx.moveTo(f.from.x * s, f.from.y * s);
@@ -231,7 +249,7 @@ export class Effects {
             return seed / 233280 - 0.5;
           };
           for (const [w, col] of [
-            [0.12, alpha(p.signal, 0.45 * k)],
+            [0.12, alpha(TOWER_ART.arc.colour, 0.55 * k)],
             [0.035, alpha(p.text, 0.95 * k)],
           ] as const) {
             ctx.strokeStyle = col;
@@ -260,8 +278,8 @@ export class Effects {
         }
         case 'blast': {
           const r = f.radius * s * (0.4 + 0.6 * (1 - k * k));
-          glow(ctx, f.at.x * s, f.at.y * s, r * 1.2, p.signal, 0.5 * k);
-          ctx.strokeStyle = alpha(p.signalSoft, 0.8 * k);
+          glow(ctx, f.at.x * s, f.at.y * s, r * 1.2, DUST, 0.55 * k);
+          ctx.strokeStyle = alpha(TOWER_ART.mortar.colour, 0.8 * k);
           ctx.lineWidth = Math.max(1, s * 0.05 * k);
           ctx.beginPath();
           ctx.arc(f.at.x * s, f.at.y * s, r, 0, Math.PI * 2);
@@ -294,8 +312,13 @@ export class Effects {
     for (const f of this.fx) {
       if (f.kind !== 'text' || f.age < 0) continue;
       const k = 1 - f.age / f.life;
+      const ty = (f.at.y - 0.35 - (1 - k) * 0.6) * s;
+      ctx.strokeStyle = alpha(p.bgDeep, Math.min(1, k * 1.6) * 0.9);
+      ctx.lineWidth = Math.max(2, s * 0.08);
+      ctx.lineJoin = 'round';
+      ctx.strokeText(f.text, f.at.x * s, ty);
       ctx.fillStyle = alpha(f.colour, Math.min(1, k * 1.6));
-      ctx.fillText(f.text, f.at.x * s, (f.at.y - 0.35 - (1 - k) * 0.6) * s);
+      ctx.fillText(f.text, f.at.x * s, ty);
     }
     ctx.restore();
   }
