@@ -520,8 +520,10 @@ kbd {
   touch-action: manipulation;
 }
 
+/* An outline, not an inset shadow: a canvas paints over its own inset shadow. */
 .board:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--color-focus);
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
 }
 
 .toast,
@@ -1083,7 +1085,7 @@ kbd {
   /* The board goes edge to edge, so the tiles are as large as the screen allows. Portals and
      the Heart Tree stand on the rock ring, so none of it is cropped. */
   .board-wrap,
-  .embed .board-wrap {
+  :root.embed .board-wrap {
     justify-self: start;
     width: calc(100% + 2 * var(--gutter));
     margin-inline: calc(-1 * var(--gutter));
