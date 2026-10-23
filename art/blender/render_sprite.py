@@ -20,6 +20,12 @@ import common  # noqa: E402
 
 GOLD = (1.0, 0.78, 0.3)
 
+# Colours here are linear, as Blender takes them (sRGB 0.5 is about linear 0.21).
+MAIN_COAT = ('Main', 'Muzzle', 'Hooves', 'Eye_White')
+UNICORN_MANES = {1: (0.42, 0.16, 0.9), 2: (0.85, 0.12, 0.55), 3: (1.0, 0.62, 0.12)}
+OGRE_FUR = (0.075, 0.045, 0.022)
+OGRE_SKIN = (0.2, 0.17, 0.06)
+
 
 # ---- Recipes: props per role --------------------------------------------------------------
 
@@ -37,9 +43,14 @@ def recipe_unicorn(objs, spec, tier):
     horn = common.add('cone', 'horn', pearl, radius1=0.025, depth=0.2, vertices=12,
                       location=top + mathutils.Vector((0.02 * forward, 0, 0.08)))
     horn.rotation_euler = (0, math.radians(30 * forward), 0)
-    common.tint(objs, (0.97, 0.94, 1.0), 0.45)
+    common.tint(objs, (0.97, 0.94, 1.0), 0.45, only=MAIN_COAT)
+    # The mane and tail tell the levels apart: violet, then magenta, then glowing gold.
+    mane = UNICORN_MANES[tier]
+    common.tint(objs, mane, 0.85, only=('Hair',))
+    if tier == 3:
+        common.glow_materials(objs, mane, 0.6, only=('Hair',))
     # a violet glow around the hooves
-    aura = common.material('hoofglow', spec['colour'], emit=1.0, alpha=0.6)
+    aura = common.material('hoofglow', spec['colour'], emit=1.0 + tier * 0.4, alpha=0.6)
     glow = common.add('torus', 'hoofglow', aura, major_radius=(hi.x - lo.x) * 0.32,
                       minor_radius=0.012, location=((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z + 0.02))
     glow.scale = (1, 0.55, 1)
@@ -183,7 +194,9 @@ def recipe_shaman(objs, spec, tier):
 
 
 def recipe_ogre(objs, spec, tier):
-    common.tint(objs, spec['colour'], 0.6)
+    # Dark brown fur and olive skin: the yeti's white fur only half tinted read as pink.
+    common.tint(objs, OGRE_FUR, 0.9, only=('Yeti_Main',))
+    common.tint(objs, OGRE_SKIN, 0.85, only=('Yeti_Secondary',))
     lo, hi = common.bounds(objs)
     gold = common.material('crown', GOLD, metal=0.9, rough=0.3, emit=0.3)
     cx, cy = (lo.x + hi.x) / 2, (lo.y + hi.y) / 2

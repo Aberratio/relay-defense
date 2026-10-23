@@ -169,14 +169,17 @@ def material(name, rgb, emit=0.0, metal=0.0, rough=0.6, alpha=1.0):
     return m
 
 
-def tint(objs, rgb, amount):
-    """Mixes every material's base colour towards `rgb` by `amount` (0..1)."""
+def tint(objs, rgb, amount, only=None):
+    """Mixes every material's base colour towards `rgb` (linear) by `amount` (0..1); with
+    `only`, just the materials whose name starts with one of those prefixes."""
     seen = set()
     for o in objs:
         if o.type != 'MESH':
             continue
         for m in o.data.materials:
             if not m or m.name in seen or m.name == 'outline' or not m.use_nodes:
+                continue
+            if only and not any(m.name.startswith(p) for p in only):
                 continue
             seen.add(m.name)
             tree = m.node_tree
@@ -194,6 +197,20 @@ def tint(objs, rgb, amount):
             else:
                 mix.inputs[6].default_value = tuple(base.default_value)
             tree.links.new(mix.outputs[2], base)
+
+
+def glow_materials(objs, rgb, strength, only=None):
+    """Makes the matching materials (by name prefix, like `tint`) emit `rgb` at `strength`."""
+    for o in objs:
+        if o.type != 'MESH':
+            continue
+        for m in o.data.materials:
+            if not m or not m.use_nodes or (only and not any(m.name.startswith(p) for p in only)):
+                continue
+            bsdf = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+            if bsdf:
+                bsdf.inputs['Emission Color'].default_value = (*rgb, 1)
+                bsdf.inputs['Emission Strength'].default_value = strength
 
 
 def add(primitive, name, mat, **kwargs):

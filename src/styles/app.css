@@ -1079,6 +1079,17 @@ kbd {
     grid-column: 2;
     justify-items: start;
   }
+
+  /* The board goes edge to edge, so the tiles are as large as the screen allows. Portals and
+     the Heart Tree stand on the rock ring, so none of it is cropped. */
+  .board-wrap,
+  .embed .board-wrap {
+    justify-self: start;
+    width: calc(100% + 2 * var(--gutter));
+    margin-inline: calc(-1 * var(--gutter));
+    border-inline: 0;
+    border-radius: 0;
+  }
 }
 
 /* ---- Embedded on kokot.it ------------------------------------------------------------ */
