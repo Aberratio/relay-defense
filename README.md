@@ -60,8 +60,8 @@ the next level to win, the ten levels as a path of nodes, and the Siege under it
 levels are open; winning a level opens the next one, and a locked node shows the silhouette of the
 monster or defender waiting there. The Siege is open from the start.
 
-- **Nothing new in the save.** Only wins are saved, so a level is open when the one before it has
-  a result. Players who won levels before the path existed find them open.
+- **Nothing new in the save.** Only wins are saved, so a level is open when it or the one before
+  it has a result. Players who won levels before the path existed find them open.
 - **Nobody is locked out.** `?level=<id>` still opens any level, a locked node offers to open them
   all, and the help (?) has the same switch (kept in the browser under its own key).
 - Level descriptions live in the briefing before each level, the introduction and the star rule in

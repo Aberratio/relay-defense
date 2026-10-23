@@ -158,13 +158,19 @@ export class App {
   /** The live board behind the menu's title, or null when it could not be set up. */
   private showcase: {
     renderer: BoardRenderer;
-    canvas: HTMLCanvasElement;
-    start: Game;
+    /** The wave a few seconds in; every loop starts from a copy of it. */
+    scene: Game;
     game: Game;
     acc: number;
-    drawn: number;
+    /** Still frames drawn since the last resize (reduced motion). */
+    stills: number;
+    lastStill: number;
+    visible: boolean;
     menu: HTMLElement;
   } | null = null;
+  private showcaseTried = false;
+  /** What the status line under the levels says: a locked level's hint, or that all are open. */
+  private menuHint: number | 'all' | null = null;
   private game: Game | null = null;
   private levelIndex = 0;
   private siege: SiegeSave;
@@ -212,8 +218,13 @@ export class App {
     this.siege = loadSiege(SIEGE.version, SIEGE_CHAPTERS.length);
   }
 
-  /** Sets up the showcase board; the menu works the same without it. */
+  /**
+   * Sets up the showcase board the first time the menu shows (deep links to a level never pay
+   * for it); the menu works the same without it.
+   */
   private setUpShowcase(): void {
+    if (this.showcaseTried) return;
+    this.showcaseTried = true;
     const start = showcaseStart();
     if (!start) {
       $('hero-scene').hidden = true;
@@ -221,25 +232,43 @@ export class App {
     }
     const canvas = $('showcase') as HTMLCanvasElement;
     const renderer = new BoardRenderer(canvas, this.palette, this.opts.reducedMotion);
-    const game = showcaseScene(start);
+    const scene = showcaseScene(start);
+    const game = scene.clone();
     renderer.setGame(game);
-    this.showcase = { renderer, canvas, start, game, acc: 0, drawn: 0, menu: $('menu') };
+    const sc = {
+      renderer,
+      scene,
+      game,
+      acc: 0,
+      stills: 0,
+      lastStill: 0,
+      visible: true,
+      menu: $('menu'),
+    };
+    this.showcase = sc;
     new ResizeObserver(() => {
       renderer.resize();
-      if (this.showcase) this.showcase.drawn = 0;
+      sc.stills = 0;
     }).observe(canvas);
+    // Off screen (scrolled past, or the frame out of view on kokot.it) the board stops.
+    new IntersectionObserver((entries) => {
+      sc.visible = entries.some((e) => e.isIntersecting);
+      sc.acc = 0;
+    }).observe($('hero-scene'));
   }
 
   /**
-   * Plays the showcase while the menu is on screen. With reduced motion it stays a still frame,
-   * redrawn now and then only so the sprites appear once they have loaded.
+   * Plays the showcase while it is on screen and no dialog is open. With reduced motion it is a
+   * still frame, redrawn a few times after a resize only so the sprites appear once loaded.
    */
   private tickShowcase(dt: number, ts: number): void {
     const sc = this.showcase;
-    if (!sc || sc.menu.hidden || !sc.menu.isConnected) return;
+    if (!sc || !sc.visible || this.dialogKind) return;
+    if (sc.menu.hidden || !sc.menu.isConnected) return;
     if (this.opts.reducedMotion) {
-      if (ts - sc.drawn < 500) return;
-      sc.drawn = ts;
+      if (sc.stills >= 10 || ts - sc.lastStill < 500) return;
+      sc.stills++;
+      sc.lastStill = ts;
       sc.renderer.draw(1, 0, { hover: null, ghost: null, selected: null, cursor: false });
       return;
     }
@@ -254,7 +283,7 @@ export class App {
     sc.renderer.advance(dt);
     if (!sc.game.running()) {
       // The wave is over: play it again from the same moment.
-      sc.game = showcaseScene(sc.start);
+      sc.game = sc.scene.clone();
       sc.renderer.setGame(sc.game);
       sc.acc = 0;
     }
@@ -268,7 +297,6 @@ export class App {
 
   start(): void {
     this.bindStatic();
-    this.setUpShowcase();
     this.applyLang(this.lang);
     const start = this.opts.startLevel
       ? LEVELS.findIndex((l) => l.id === this.opts.startLevel)
@@ -403,7 +431,8 @@ export class App {
     $('stats').hidden = true;
     $('controls').hidden = true;
     $('level-name').textContent = '';
-    $('menu-status').replaceChildren();
+    this.menuHint = null;
+    this.setUpShowcase();
     this.renderMenu();
     this.showcase?.renderer.resize();
   }
@@ -411,6 +440,7 @@ export class App {
   private renderMenu(): void {
     this.renderHero();
     this.renderLevels();
+    this.renderStatus();
     this.renderSiege();
   }
 
@@ -421,7 +451,10 @@ export class App {
   private renderHero(): void {
     const ids = LEVELS.map((l) => l.id);
     const next = nextLevel(ids, this.progress, this.unlockAll);
-    const play = h('button', { class: 'btn btn-primary btn-play', attrs: { type: 'button' } });
+    const play = h('button', {
+      class: 'btn btn-primary btn-play',
+      attrs: { type: 'button', 'data-role': 'play' },
+    });
     if (next !== null) {
       const level = LEVELS[next];
       play.textContent = this.t.play(`${next + 1}. ${level ? this.copyOf(level).name : ''}`);
@@ -437,7 +470,7 @@ export class App {
     const how = h('button', {
       class: 'btn btn-ghost',
       text: this.t.howTitle,
-      attrs: { type: 'button' },
+      attrs: { type: 'button', 'data-role': 'how' },
     });
     how.addEventListener('click', () => this.openHelp());
     $('hero-actions').replaceChildren(play, how);
@@ -560,19 +593,35 @@ export class App {
 
   /** Says what opens a locked level and offers to open them all. */
   private lockedHint(index: number): void {
+    this.menuHint = index;
+    this.renderStatus();
+  }
+
+  /** The line under the levels: why a level is locked (with unlock all), or that all are open. */
+  private renderStatus(): void {
+    const hint = this.menuHint;
+    const status = $('menu-status');
+    if (hint === null) {
+      status.replaceChildren();
+      return;
+    }
+    if (hint === 'all') {
+      status.replaceChildren(h('p', { text: this.t.allOpen }));
+      return;
+    }
     const unlock = h('button', {
       class: 'btn btn-ghost',
       text: this.t.unlockAll,
       attrs: { type: 'button' },
     });
     unlock.addEventListener('click', () => {
+      this.menuHint = 'all';
       this.setUnlockAll(true);
-      $('menu-status').replaceChildren(h('p', { text: this.t.allOpen }));
       $('levels')
         .querySelectorAll<HTMLElement>('.level-node')
-        [index]?.focus({ preventScroll: true });
+        [hint]?.focus({ preventScroll: true });
     });
-    $('menu-status').replaceChildren(h('p', { text: this.t.lockedHint(index) }), unlock);
+    status.replaceChildren(h('p', { text: this.t.lockedHint(hint) }), unlock);
   }
 
   private setUnlockAll(on: boolean): void {
@@ -677,7 +726,13 @@ export class App {
     this.dialogKind = null;
     $('overlay').hidden = true;
     this.setInert(false);
-    const back = this.opener?.isConnected && !this.opener.closest('[hidden]') ? this.opener : null;
+    const opener = this.opener;
+    const role = opener?.dataset.role;
+    const same =
+      opener && !opener.isConnected && role
+        ? document.querySelector<HTMLElement>(`#menu [data-role="${role}"]`)
+        : opener;
+    const back = same?.isConnected && !same.closest('[hidden]') ? same : null;
     this.opener = null;
     if (this.game) this.canvas.focus({ preventScroll: true });
     else back?.focus({ preventScroll: true });
@@ -815,9 +870,10 @@ export class App {
       attrs: { type: 'button', 'data-role': 'unlock-all' },
     });
     toggle.addEventListener('click', () => {
+      this.menuHint = null;
       this.setUnlockAll(!this.unlockAll);
       toggle.textContent = this.unlockAll ? this.t.lockAgain : this.t.unlockAll;
-      $('announcer').textContent = this.unlockAll ? this.t.allOpen : '';
+      this.announce(this.unlockAll ? this.t.allOpen : this.t.locksBack);
     });
     this.showDialog(
       'help',

@@ -24,7 +24,8 @@ describe('unlock', () => {
   it('keeps a level won out of order open and the one after it too', () => {
     // A player who won level 6 through a link (?level=) or before unlocking existed.
     const progress = { [ids[5]!]: 2 };
-    expect(isUnlocked(5, ids, progress, false)).toBe(false);
+    expect(isUnlocked(5, ids, progress, false)).toBe(true);
+    expect(isUnlocked(4, ids, progress, false)).toBe(false);
     expect(isUnlocked(6, ids, progress, false)).toBe(true);
   });
 
