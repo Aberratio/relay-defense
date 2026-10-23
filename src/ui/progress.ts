@@ -43,6 +43,30 @@ export function recordResult(
   return next;
 }
 
+// ---- Unlock all ------------------------------------------------------------------------------
+
+const UNLOCK_ALL_KEY = 'relay-defense:unlock-all:v1';
+
+/** Whether the player opened every level from the help, skipping the unlock path. */
+export function loadUnlockAll(storage: Pick<Storage, 'getItem'> | null = safeStorage()): boolean {
+  try {
+    return storage?.getItem(UNLOCK_ALL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function saveUnlockAll(
+  on: boolean,
+  storage: Pick<Storage, 'setItem'> | null = safeStorage(),
+): void {
+  try {
+    storage?.setItem(UNLOCK_ALL_KEY, on ? '1' : '0');
+  } catch {
+    // Storage is full or blocked: the choice still holds for this session.
+  }
+}
+
 function safeStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;

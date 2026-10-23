@@ -268,15 +268,20 @@ kbd {
 }
 
 /* ---- Menu ---------------------------------------------------------------------------- */
+/* A landing: the title and one call to action next to a live board, then the levels as a path
+   of nodes and the Siege. Every height follows the width, so the embed stays loop-free. */
 
 .screen-menu {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-7) var(--gutter) var(--space-8);
+  padding: var(--space-6) var(--gutter) var(--space-8);
 }
 
 .hero {
-  max-width: 46rem;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: var(--space-6);
   margin-bottom: var(--space-7);
 }
 
@@ -293,43 +298,144 @@ kbd {
   font-weight: var(--weight-medium);
 }
 
-.intro {
-  margin-top: var(--space-4);
-  color: var(--color-text-muted);
-  max-width: var(--measure);
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
 }
 
-.level-grid h2 {
+.btn-play {
+  min-height: 3rem;
+  padding: 0 var(--space-5);
+  font-size: var(--text-md);
+}
+
+.hero-scene {
+  position: relative;
+  aspect-ratio: var(--board-ratio);
+  border: var(--border-width) solid var(--color-line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg-deep);
+  box-shadow: var(--shadow-2);
+}
+
+.showcase {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The path of levels: a snake of five per row on wide screens, two per row on phones. */
+.trail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.trail-head h2 {
   font-size: var(--text-xl);
 }
 
-.stars-rule {
-  margin-top: var(--space-1);
-  color: var(--color-text-subtle);
-  font-size: var(--text-sm);
+.trail-total {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
 }
 
 .levels {
+  --trail-gap: var(--space-5);
+  /* Vertical centre of a node's picture: the line between nodes runs through it. */
+  --node-mid: calc(var(--space-3) + 38px);
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--trail-gap);
   margin: var(--space-5) 0 0;
   padding: 0;
   list-style: none;
 }
 
-.level-card {
+.trail-step {
+  position: relative;
+}
+
+.trail-step:nth-child(6) {
+  grid-area: 2 / 5;
+}
+.trail-step:nth-child(7) {
+  grid-area: 2 / 4;
+}
+.trail-step:nth-child(8) {
+  grid-area: 2 / 3;
+}
+.trail-step:nth-child(9) {
+  grid-area: 2 / 2;
+}
+.trail-step:nth-child(10) {
+  grid-area: 2 / 1;
+}
+
+/* The line to the next node: right on the first row, down at its end, left on the second. */
+.trail-step::after {
+  content: '';
+  position: absolute;
+  top: var(--node-mid);
+  left: 50%;
+  width: calc(100% + var(--trail-gap));
+  height: 3px;
+  margin-top: -1.5px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--color-line-strong) 0 8px,
+    transparent 8px 14px
+  );
+}
+
+.trail-step:nth-child(n + 6)::after {
+  right: 50%;
+  left: auto;
+}
+
+.trail-step:nth-child(5)::after {
+  top: 50%;
+  width: 3px;
+  height: calc(100% + var(--trail-gap));
+  margin: 0 0 0 -1.5px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--color-line-strong) 0 8px,
+    transparent 8px 14px
+  );
+}
+
+.trail-step:last-child::after {
+  content: none;
+}
+
+.trail-step.is-won::after {
+  background: var(--color-accent);
+  opacity: 0.55;
+}
+
+.level-node {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--space-4);
+  justify-items: center;
+  align-content: start;
+  gap: var(--space-1);
   width: 100%;
   height: 100%;
-  padding: var(--space-4);
+  padding: var(--space-3) var(--space-2);
   border: var(--border-width) solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition:
     border-color var(--duration-fast) var(--ease-out),
@@ -337,43 +443,94 @@ kbd {
     box-shadow var(--duration-fast) var(--ease-out);
 }
 
-.level-card:hover {
+.trail-step:not(.is-locked, .is-next) .level-node:hover {
   border-color: rgb(255 181 71 / 0.6);
   background: var(--color-surface-raised);
+}
+
+.node-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border: 2px solid var(--color-line-strong);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 62%, rgb(255 255 255 / 0.06), transparent 70%),
+    var(--color-bg-deep);
+}
+
+.is-won .node-art {
+  border-color: rgb(255 181 71 / 0.7);
+}
+
+.is-next .level-node {
+  border-color: var(--color-accent);
   box-shadow: var(--glow-accent);
+}
+
+.is-next .node-art {
+  border-color: var(--color-accent);
 }
 
 .level-num {
   color: var(--color-accent);
   font-family: var(--font-mono);
-  font-size: var(--text-lg);
+  font-size: var(--text-sm);
   font-weight: var(--weight-bold);
 }
 
-.level-body {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.level-title {
-  font-weight: var(--weight-semibold);
-}
-
-.level-brief {
-  color: var(--color-text-muted);
+.node-name {
   font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
   line-height: var(--leading-snug);
 }
 
-.level-side {
-  display: grid;
-  justify-items: end;
-  gap: var(--space-2);
+/* Locked: the character is a silhouette, a hint of what is still to come. */
+.is-locked .level-node {
+  background: var(--color-bg);
+  cursor: default;
 }
 
-.level-icons {
+.is-locked .node-art .icon {
+  filter: brightness(0);
+  opacity: 0.55;
+}
+
+.is-locked .level-num,
+.is-locked .node-name {
+  color: var(--color-text-subtle);
+}
+
+.lock {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  border: var(--border-width) solid var(--color-line-strong);
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+.stars-placeholder {
+  height: 14px;
+}
+
+.menu-status {
   display: flex;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.menu-status:empty {
+  margin: 0;
 }
 
 .stars {
@@ -403,19 +560,44 @@ kbd {
   background: var(--color-accent);
 }
 
-/* Siege: one wide card under the levels. */
+/* Siege: one wide card under the path, with its warlord. */
 .siege {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-5);
   margin-top: var(--space-7);
   padding: var(--space-5);
   border: var(--border-width) solid var(--color-line-strong);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background:
+    radial-gradient(ellipse 50% 90% at 0% 50%, rgb(255 181 71 / 0.08), transparent 70%),
+    var(--color-surface);
+}
+
+.siege-art {
+  position: relative;
+  display: grid;
+  place-items: end center;
+  width: 140px;
+  height: 120px;
+}
+
+.siege-art .icon:first-child {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0.85;
+}
+
+.siege-art .icon:last-child {
+  position: relative;
 }
 
 .siege-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-3);
 }
 
@@ -424,9 +606,16 @@ kbd {
 }
 
 .siege-badge {
-  color: var(--color-success);
-  font-family: var(--font-mono);
+  padding: 2px var(--space-3);
+  border: var(--border-width) solid var(--color-line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
   font-size: var(--text-sm);
+}
+
+.siege-badge.is-won {
+  border-color: var(--color-success);
+  color: var(--color-success);
 }
 
 .siege-tagline {
@@ -437,7 +626,7 @@ kbd {
 
 .siege-chapters {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
   gap: var(--space-2);
   margin: var(--space-4) 0 0;
   padding: 0;
@@ -449,7 +638,7 @@ kbd {
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: var(--space-1) var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: var(--border-width) solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -473,6 +662,7 @@ kbd {
 }
 
 .siege-chapter-name {
+  font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
 }
 
@@ -485,6 +675,131 @@ kbd {
 
 .siege-next {
   color: var(--color-text-muted);
+}
+
+.help-unlock {
+  margin-top: var(--space-3);
+}
+
+@media (max-width: 900px) {
+  .levels {
+    --trail-gap: var(--space-3);
+  }
+}
+
+@media (max-width: 760px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+}
+
+/* Phones: two nodes per row, the path turning at every row end. */
+@media (max-width: 640px) {
+  .levels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --trail-gap: var(--space-5);
+  }
+
+  .trail-step:nth-child(1) {
+    grid-area: 1 / 1;
+  }
+  .trail-step:nth-child(2) {
+    grid-area: 1 / 2;
+  }
+  .trail-step:nth-child(3) {
+    grid-area: 2 / 2;
+  }
+  .trail-step:nth-child(4) {
+    grid-area: 2 / 1;
+  }
+  .trail-step:nth-child(5) {
+    grid-area: 3 / 1;
+  }
+  .trail-step:nth-child(6) {
+    grid-area: 3 / 2;
+  }
+  .trail-step:nth-child(7) {
+    grid-area: 4 / 2;
+  }
+  .trail-step:nth-child(8) {
+    grid-area: 4 / 1;
+  }
+  .trail-step:nth-child(9) {
+    grid-area: 5 / 1;
+  }
+  .trail-step:nth-child(10) {
+    grid-area: 5 / 2;
+  }
+
+  /* Reset the wide snake's lines, then draw this one's: right, down, left, down, ... */
+  .trail-step:nth-child(n)::after {
+    top: var(--node-mid);
+    right: auto;
+    left: 50%;
+    width: calc(100% + var(--trail-gap));
+    height: 3px;
+    margin: -1.5px 0 0;
+    background: repeating-linear-gradient(
+      to right,
+      var(--color-line-strong) 0 8px,
+      transparent 8px 14px
+    );
+  }
+
+  .trail-step:nth-child(4n + 3)::after {
+    right: 50%;
+    left: auto;
+  }
+
+  .trail-step:nth-child(even)::after {
+    top: 50%;
+    width: 3px;
+    height: calc(100% + var(--trail-gap));
+    margin: 0 0 0 -1.5px;
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--color-line-strong) 0 8px,
+      transparent 8px 14px
+    );
+  }
+
+  .trail-step.is-won:nth-child(n)::after {
+    background: var(--color-accent);
+  }
+
+  .trail-step:last-child::after {
+    content: none;
+  }
+
+  .siege {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .siege-art {
+    width: 112px;
+    height: 96px;
+  }
+
+  .siege-art .icon {
+    transform: scale(0.8);
+    transform-origin: bottom center;
+  }
+
+  .siege-chapters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .siege-chapter {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .siege-chapter .stars {
+    grid-column: 1;
+  }
 }
 
 /* ---- Play screen --------------------------------------------------------------------- */
@@ -1071,15 +1386,6 @@ kbd {
 
   .dialog {
     padding: var(--space-5);
-  }
-
-  .level-card {
-    grid-template-columns: auto 1fr;
-  }
-
-  .level-side {
-    grid-column: 2;
-    justify-items: start;
   }
 
   /* The board goes edge to edge, so the tiles are as large as the screen allows. Portals and

@@ -74,7 +74,18 @@ async function open(path: string, width: number, height: number, scale = 1): Pro
 }
 
 const menu = await open('?lang=en', 1440, 900);
-await menu.screenshot({ path: `${out}/menu-en.png` });
+// A player three levels in: three won, the fourth next, the rest locked.
+await menu.evaluate(() =>
+  localStorage.setItem(
+    'relay-defense:progress:v1',
+    JSON.stringify({ handshake: 3, 'fan-out': 2, bulwark: 3 }),
+  ),
+);
+await menu.reload();
+await menu.waitForLoadState('networkidle');
+await menu.waitForTimeout(600);
+await menu.screenshot({ path: `${out}/menu-en.png`, fullPage: true });
+await menu.evaluate(() => localStorage.clear());
 await menu.close();
 
 const brief = await open('?lang=en&level=ghost-protocol', 1440, 900);

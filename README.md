@@ -53,6 +53,22 @@ core, portals are gates, gold is credits, stone circles are sockets and paths ar
 Each defender except Thorns has three levels (a gold ring and a banner at level 2, a halo at
 level 3) and four targeting modes (first, last, strongest, weakest).
 
+## Levels and progress
+
+The menu is the game's landing page: a live board from Two Fronts next to one button that opens
+the next level to win, the ten levels as a path of nodes, and the Siege under it. The first three
+levels are open; winning a level opens the next one, and a locked node shows the silhouette of the
+monster or defender waiting there. The Siege is open from the start.
+
+- **Nothing new in the save.** Only wins are saved, so a level is open when it or the one before
+  it has a result. Players who won levels before the path existed find them open.
+- **Nobody is locked out.** `?level=<id>` still opens any level, a locked node offers to open them
+  all, and the help (?) has the same switch (kept in the browser under its own key).
+- Level descriptions live in the briefing before each level, the introduction and the star rule in
+  the help, so the menu itself is pictures, names and stars.
+
+![The menu: a live board, the next level to play and the path of levels](docs/screenshots/menu-en.png)
+
 ## Siege
 
 A separate mode next to the ten levels: one meadow split by a ridge, five chapters of four waves.
@@ -138,7 +154,9 @@ Keyboard play end to end: `1`–`7` pick a defender, arrow keys move a board cur
 descriptions, `Enter` builds or selects, `Space` starts a wave or pauses, `U`/`S`/`T` upgrade,
 sell and change the target, `F` changes speed, `Esc` cancels. Game events are announced in a
 live region, dialogs keep focus and make the page behind them inert, and `prefers-reduced-motion` stops screen shake, idle animation
-and most particles. On touch screens the first tap previews a placement and the second builds.
+and most particles; the board on the menu then holds still. Locked levels stay focusable and
+are announced as locked; activating one says which win opens it. On touch screens the first tap
+previews a placement and the second builds.
 
 ## Embedding
 

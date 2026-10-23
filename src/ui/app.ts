@@ -23,12 +23,16 @@ import { strings, type Lang, type Strings } from './i18n';
 import {
   loadProgress,
   loadSiege,
+  loadUnlockAll,
   recordResult,
   saveSiege,
+  saveUnlockAll,
   starsFor,
   type Progress,
   type SiegeSave,
 } from './progress';
+import { showcaseScene, showcaseStart } from './showcase';
+import { isUnlocked, nextLevel } from './unlock';
 
 export interface AppOptions {
   lang: Lang;
@@ -90,6 +94,44 @@ export function newKinds(index: number): { towers: TowerKind[]; enemies: EnemyKi
   };
 }
 
+/**
+ * The character a level's node on the menu shows: the monster it introduces, else the defender it
+ * introduces, else its strongest monster.
+ */
+export function levelSprite(index: number): string {
+  const level = LEVELS[index];
+  if (!level) return 'heart-tree';
+  const fresh = newKinds(index);
+  const enemy = fresh.enemies.at(-1);
+  if (enemy) return ENEMY_ART[enemy].sprite;
+  const tower = fresh.towers[0];
+  if (tower) return towerSprite(tower, 0);
+  const present = new Set(level.waves.flatMap((w) => w.groups.map((g) => g.enemy)));
+  const strongest = ENEMY_KINDS.filter((e) => present.has(e)).at(-1);
+  return strongest ? ENEMY_ART[strongest].sprite : 'heart-tree';
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** A small padlock drawn in the current text colour. */
+function lockIcon(): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('class', 'lock');
+  svg.setAttribute('aria-hidden', 'true');
+  const shackle = document.createElementNS(SVG_NS, 'path');
+  shackle.setAttribute('d', 'M5 7V5a3 3 0 0 1 6 0v2');
+  shackle.setAttribute('fill', 'none');
+  shackle.setAttribute('stroke', 'currentColor');
+  shackle.setAttribute('stroke-width', '1.6');
+  const body = document.createElementNS(SVG_NS, 'rect');
+  for (const [k, v] of Object.entries({ x: '3', y: '7', width: '10', height: '7', rx: '1.5' }))
+    body.setAttribute(k, v);
+  body.setAttribute('fill', 'currentColor');
+  svg.append(shackle, body);
+  return svg;
+}
+
 /** The carry without the defenders that do not fit the chapter's board. */
 function fitting(level: LevelDef, carry: Carry): Carry {
   const towers: Carry['towers'] = [];
@@ -111,6 +153,24 @@ export class App {
   private renderer: BoardRenderer;
   private canvas: HTMLCanvasElement;
   private progress: Progress;
+  /** Every level open, chosen in the help. */
+  private unlockAll: boolean;
+  /** The live board behind the menu's title, or null when it could not be set up. */
+  private showcase: {
+    renderer: BoardRenderer;
+    /** The wave a few seconds in; every loop starts from a copy of it. */
+    scene: Game;
+    game: Game;
+    acc: number;
+    /** Still frames drawn since the last resize (reduced motion). */
+    stills: number;
+    lastStill: number;
+    visible: boolean;
+    menu: HTMLElement;
+  } | null = null;
+  private showcaseTried = false;
+  /** What the status line under the levels says: a locked level's hint, or that all are open. */
+  private menuHint: number | 'all' | null = null;
   private game: Game | null = null;
   private levelIndex = 0;
   private siege: SiegeSave;
@@ -154,7 +214,85 @@ export class App {
     this.canvas = $('board') as HTMLCanvasElement;
     this.renderer = new BoardRenderer(this.canvas, this.palette, opts.reducedMotion);
     this.progress = loadProgress();
+    this.unlockAll = loadUnlockAll();
     this.siege = loadSiege(SIEGE.version, SIEGE_CHAPTERS.length);
+  }
+
+  /**
+   * Sets up the showcase board the first time the menu shows (deep links to a level never pay
+   * for it); the menu works the same without it.
+   */
+  private setUpShowcase(): void {
+    if (this.showcaseTried) return;
+    this.showcaseTried = true;
+    const start = showcaseStart();
+    if (!start) {
+      $('hero-scene').hidden = true;
+      return;
+    }
+    const canvas = $('showcase') as HTMLCanvasElement;
+    const renderer = new BoardRenderer(canvas, this.palette, this.opts.reducedMotion);
+    const scene = showcaseScene(start);
+    const game = scene.clone();
+    renderer.setGame(game);
+    const sc = {
+      renderer,
+      scene,
+      game,
+      acc: 0,
+      stills: 0,
+      lastStill: 0,
+      visible: true,
+      menu: $('menu'),
+    };
+    this.showcase = sc;
+    new ResizeObserver(() => {
+      renderer.resize();
+      sc.stills = 0;
+    }).observe(canvas);
+    // Off screen (scrolled past, or the frame out of view on kokot.it) the board stops.
+    new IntersectionObserver((entries) => {
+      sc.visible = entries.some((e) => e.isIntersecting);
+      sc.acc = 0;
+    }).observe($('hero-scene'));
+  }
+
+  /**
+   * Plays the showcase while it is on screen and no dialog is open. With reduced motion it is a
+   * still frame, redrawn a few times after a resize only so the sprites appear once loaded.
+   */
+  private tickShowcase(dt: number, ts: number): void {
+    const sc = this.showcase;
+    if (!sc || !sc.visible || this.dialogKind) return;
+    if (sc.menu.hidden || !sc.menu.isConnected) return;
+    if (this.opts.reducedMotion) {
+      if (sc.stills >= 10 || ts - sc.lastStill < 500) return;
+      sc.stills++;
+      sc.lastStill = ts;
+      sc.renderer.draw(1, 0, { hover: null, ghost: null, selected: null, cursor: false });
+      return;
+    }
+    sc.acc += dt;
+    let steps = 0;
+    while (sc.acc >= DT && steps++ < 6) {
+      sc.renderer.snapshot();
+      sc.game.step();
+      sc.acc -= DT;
+      sc.renderer.handle(sc.game.drainEvents());
+    }
+    sc.renderer.advance(dt);
+    if (!sc.game.running()) {
+      // The wave is over: play it again from the same moment.
+      sc.game = sc.scene.clone();
+      sc.renderer.setGame(sc.game);
+      sc.acc = 0;
+    }
+    sc.renderer.draw(sc.acc / DT, ts / 1000, {
+      hover: null,
+      ghost: null,
+      selected: null,
+      cursor: false,
+    });
   }
 
   start(): void {
@@ -246,8 +384,7 @@ export class App {
       btn.setAttribute('aria-pressed', String(btn.dataset.lang === lang));
     }
     this.canvas.setAttribute('aria-label', this.t.boardLabel);
-    this.renderLevels();
-    this.renderSiege();
+    this.renderMenu();
     if (this.game) {
       $('level-name').textContent = this.title();
       this.renderPalette();
@@ -294,8 +431,49 @@ export class App {
     $('stats').hidden = true;
     $('controls').hidden = true;
     $('level-name').textContent = '';
+    this.menuHint = null;
+    this.setUpShowcase();
+    this.renderMenu();
+    this.showcase?.renderer.resize();
+  }
+
+  private renderMenu(): void {
+    this.renderHero();
     this.renderLevels();
+    this.renderStatus();
     this.renderSiege();
+  }
+
+  /**
+   * The call to action under the title: the next level to win, or the Siege once every level is
+   * won.
+   */
+  private renderHero(): void {
+    const ids = LEVELS.map((l) => l.id);
+    const next = nextLevel(ids, this.progress, this.unlockAll);
+    const play = h('button', {
+      class: 'btn btn-primary btn-play',
+      attrs: { type: 'button', 'data-role': 'play' },
+    });
+    if (next !== null) {
+      const level = LEVELS[next];
+      play.textContent = this.t.play(`${next + 1}. ${level ? this.copyOf(level).name : ''}`);
+      play.addEventListener('click', () => this.openLevel(next));
+    } else {
+      const cp = this.siege.checkpoint;
+      play.textContent =
+        cp && cp.chapter > 0 ? this.t.siege.resume(cp.chapter + 1) : this.t.siege.begin;
+      play.addEventListener('click', () =>
+        cp && cp.chapter > 0 ? this.openChapter(cp.chapter) : this.beginSiege(),
+      );
+    }
+    const how = h('button', {
+      class: 'btn btn-ghost',
+      text: this.t.howTitle,
+      attrs: { type: 'button', 'data-role': 'how' },
+    });
+    how.addEventListener('click', () => this.openHelp());
+    $('hero-actions').replaceChildren(play, how);
   }
 
   /** The Siege card under the levels: chapters with their stars, and how to go on. */
@@ -332,15 +510,24 @@ export class App {
     } else {
       button(done ? t.again : t.begin, 'btn-primary', () => this.beginSiege());
     }
+    const art = h('span', { class: 'siege-art', attrs: { 'aria-hidden': 'true' } }, [
+      this.spriteIcon(72, 'portal'),
+      this.enemyIcon('colossus', 96),
+    ]);
     $('siege').replaceChildren(
-      h('div', { class: 'siege-head' }, [
-        h('h2', { text: t.title, attrs: { id: 'siege-title' } }),
-        ...(done ? [h('span', { class: 'siege-badge', text: t.won })] : []),
+      art,
+      h('div', { class: 'siege-body' }, [
+        h('div', { class: 'siege-head' }, [
+          h('h2', { text: t.title, attrs: { id: 'siege-title' } }),
+          h('span', {
+            class: done ? 'siege-badge is-won' : 'siege-badge',
+            text: done ? t.won : t.hint,
+          }),
+        ]),
+        h('p', { class: 'siege-tagline', text: t.tagline }),
+        chapters,
+        h('div', { class: 'siege-actions' }, actions),
       ]),
-      h('p', { class: 'siege-tagline', text: t.tagline }),
-      h('p', { class: 'stars-rule', text: `${t.rules} ${t.hint}` }),
-      chapters,
-      h('div', { class: 'siege-actions' }, actions),
     );
   }
 
@@ -357,33 +544,90 @@ export class App {
     else this.openLevel(this.levelIndex, false);
   }
 
+  /**
+   * The levels as a path of nodes: won, the next one to play, open, or locked. A locked node stays
+   * focusable and is announced as locked; activating it says what opens it and offers to unlock
+   * every level.
+   */
   private renderLevels(): void {
-    const list = $('levels');
-    list.replaceChildren(
-      ...LEVELS.map((level, i) => {
-        const copy = this.copyOf(level);
-        const stars = this.progress[level.id] ?? 0;
-        const played = level.id in this.progress;
-        const fresh = newKinds(i);
-        const icons = h('span', { class: 'level-icons', attrs: { 'aria-hidden': 'true' } }, [
-          ...fresh.towers.map((k) => this.towerIcon(k, 22)),
-          ...fresh.enemies.map((k) => this.enemyIcon(k, 22)),
-        ]);
-        const btn = h('button', { class: 'level-card', attrs: { type: 'button' } }, [
-          h('span', { class: 'level-num', text: String(i + 1).padStart(2, '0') }),
-          h('span', { class: 'level-body' }, [
-            h('span', { class: 'level-title', text: copy.name }),
-            h('span', { class: 'level-brief', text: copy.brief }),
-          ]),
-          h('span', { class: 'level-side' }, [
-            icons,
-            this.starsEl(stars, played ? this.t.starsLabel(stars) : this.t.notPlayed),
-          ]),
-        ]);
-        btn.addEventListener('click', () => this.openLevel(i));
-        return h('li', {}, [btn]);
+    const ids = LEVELS.map((l) => l.id);
+    const next = nextLevel(ids, this.progress, this.unlockAll);
+    const total = Object.values(this.progress).reduce((sum, n) => sum + n, 0);
+    const max = LEVELS.length * 3;
+    $('levels-total').replaceChildren(
+      h('span', { class: 'star on', attrs: { 'aria-hidden': 'true' } }),
+      h('span', {
+        text: `${total} / ${max}`,
+        attrs: { role: 'img', 'aria-label': this.t.starsTotal(total, max) },
       }),
     );
+    $('levels').replaceChildren(
+      ...LEVELS.map((level, i) => {
+        const name = this.copyOf(level).name;
+        const won = level.id in this.progress;
+        const stars = this.progress[level.id] ?? 0;
+        const open = isUnlocked(i, ids, this.progress, this.unlockAll);
+        const state = !open ? 'is-locked' : i === next ? 'is-next' : won ? 'is-won' : 'is-open';
+        const status = !open ? this.t.locked : won ? this.t.starsLabel(stars) : this.t.notPlayed;
+        const attrs: Record<string, string> = {
+          type: 'button',
+          'aria-label': `${this.t.level} ${i + 1}: ${name}, ${status}`,
+        };
+        if (!open) attrs['aria-disabled'] = 'true';
+        if (i === next) attrs['aria-current'] = 'step';
+        const btn = h('button', { class: 'level-node', attrs }, [
+          h('span', { class: 'node-art' }, [
+            this.spriteIcon(64, levelSprite(i)),
+            ...(open ? [] : [lockIcon()]),
+          ]),
+          h('span', { class: 'level-num', text: String(i + 1).padStart(2, '0') }),
+          h('span', { class: 'node-name', text: name }),
+          open ? this.starsEl(stars, status) : h('span', { class: 'stars-placeholder' }),
+        ]);
+        btn.querySelector('.stars')?.setAttribute('aria-hidden', 'true');
+        btn.addEventListener('click', () => (open ? this.openLevel(i) : this.lockedHint(i)));
+        return h('li', { class: `trail-step ${state}` }, [btn]);
+      }),
+    );
+  }
+
+  /** Says what opens a locked level and offers to open them all. */
+  private lockedHint(index: number): void {
+    this.menuHint = index;
+    this.renderStatus();
+  }
+
+  /** The line under the levels: why a level is locked (with unlock all), or that all are open. */
+  private renderStatus(): void {
+    const hint = this.menuHint;
+    const status = $('menu-status');
+    if (hint === null) {
+      status.replaceChildren();
+      return;
+    }
+    if (hint === 'all') {
+      status.replaceChildren(h('p', { text: this.t.allOpen }));
+      return;
+    }
+    const unlock = h('button', {
+      class: 'btn btn-ghost',
+      text: this.t.unlockAll,
+      attrs: { type: 'button' },
+    });
+    unlock.addEventListener('click', () => {
+      this.menuHint = 'all';
+      this.setUnlockAll(true);
+      $('levels')
+        .querySelectorAll<HTMLElement>('.level-node')
+        [hint]?.focus({ preventScroll: true });
+    });
+    status.replaceChildren(h('p', { text: this.t.lockedHint(hint) }), unlock);
+  }
+
+  private setUnlockAll(on: boolean): void {
+    this.unlockAll = on;
+    saveUnlockAll(on);
+    this.renderMenu();
   }
 
   private starsEl(n: number, label: string): HTMLElement {
@@ -482,7 +726,13 @@ export class App {
     this.dialogKind = null;
     $('overlay').hidden = true;
     this.setInert(false);
-    const back = this.opener?.isConnected && !this.opener.closest('[hidden]') ? this.opener : null;
+    const opener = this.opener;
+    const role = opener?.dataset.role;
+    const same =
+      opener && !opener.isConnected && role
+        ? document.querySelector<HTMLElement>(`#menu [data-role="${role}"]`)
+        : opener;
+    const back = same?.isConnected && !same.closest('[hidden]') ? same : null;
     this.opener = null;
     if (this.game) this.canvas.focus({ preventScroll: true });
     else back?.focus({ preventScroll: true });
@@ -614,22 +864,41 @@ export class App {
       text: this.t.source,
       attrs: { href: REPO_URL, target: '_blank', rel: 'noopener' },
     });
-    this.showDialog('help', [
-      h('h2', { text: this.t.howTitle, attrs: { id: 'dialog-title' } }),
-      h(
-        'ol',
-        { class: 'how' },
-        this.t.how.map((line) => h('li', { text: line })),
-      ),
-      h('p', { class: 'dialog-note', text: this.t.starsRule }),
-      h('h3', { text: this.t.keysTitle }),
-      keys,
-      h('div', { class: 'dialog-actions' }, [
-        // In the portfolio frame the page around it already links the repository.
-        ...(this.opts.embed ? [] : [h('p', { class: 'dialog-note' }, [source])]),
-        close,
-      ]),
-    ]);
+    const toggle = h('button', {
+      class: 'btn btn-ghost',
+      text: this.unlockAll ? this.t.lockAgain : this.t.unlockAll,
+      attrs: { type: 'button', 'data-role': 'unlock-all' },
+    });
+    toggle.addEventListener('click', () => {
+      this.menuHint = null;
+      this.setUnlockAll(!this.unlockAll);
+      toggle.textContent = this.unlockAll ? this.t.lockAgain : this.t.unlockAll;
+      this.announce(this.unlockAll ? this.t.allOpen : this.t.locksBack);
+    });
+    this.showDialog(
+      'help',
+      [
+        h('h2', { text: this.t.howTitle, attrs: { id: 'dialog-title' } }),
+        h('p', { class: 'dialog-lead', text: this.t.intro }),
+        h(
+          'ol',
+          { class: 'how' },
+          this.t.how.map((line) => h('li', { text: line })),
+        ),
+        h('p', { class: 'dialog-note', text: this.t.starsRule }),
+        h('h3', { text: this.t.progressTitle }),
+        h('p', { class: 'dialog-note', text: this.t.unlockRule }),
+        h('div', { class: 'help-unlock' }, [toggle]),
+        h('h3', { text: this.t.keysTitle }),
+        keys,
+        h('div', { class: 'dialog-actions' }, [
+          // In the portfolio frame the page around it already links the repository.
+          ...(this.opts.embed ? [] : [h('p', { class: 'dialog-note' }, [source])]),
+          close,
+        ]),
+      ],
+      close,
+    );
   }
 
   private openResult(): void {
@@ -1489,7 +1758,7 @@ export class App {
         cursor: this.keyboardCursor,
       };
       this.renderer.draw(running ? this.acc / DT : 1, ts / 1000, view);
-    }
+    } else this.tickShowcase(dt, ts);
     requestAnimationFrame((t) => this.frame(t));
   }
 }
