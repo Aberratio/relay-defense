@@ -100,17 +100,18 @@ def recipe_dryad(objs, spec, tier):
 def recipe_fairy(objs, spec, tier):
     lo, hi = common.bounds(objs)
     common.tint(objs, (1.0, 0.88, 0.45), 0.3)
-    wing = common.material('wing', (1.0, 0.95, 0.7), emit=2.5, alpha=0.75)
+    wing = common.material('wing', (1.0, 0.93, 0.6), emit=1.5, alpha=0.9)
     cx = (lo.x + hi.x) / 2
+    cy = (lo.y + hi.y) / 2
     wings = []
     for side in (-1, 1):
-        w = common.add('uv_sphere', 'wing', wing, radius=0.2,
-                       location=(cx + side * 0.13, hi.y + 0.02, lo.z + (hi.z - lo.z) * 0.62))
-        w.scale = (0.75, 0.08, 1.0)
-        w.rotation_euler = (0, math.radians(-25 * side), 0)
+        w = common.add('uv_sphere', 'wing', wing, radius=0.18,
+                       location=(cx + side * (hi.x - lo.x) * 0.55, cy + 0.02, lo.z + (hi.z - lo.z) * 0.68))
+        w.scale = (0.9, 0.06, 0.65)
+        w.rotation_euler = (0, math.radians(30 * side), 0)
         wings.append(w)
-    light = common.material('lantern', (1.0, 0.85, 0.35), emit=4.0 + tier)
-    lamp = common.add('uv_sphere', 'lamp', light, radius=0.05,
+    light = common.material('lantern', (1.0, 0.8, 0.3), emit=3.0 + tier)
+    lamp = common.add('uv_sphere', 'lamp', light, radius=0.065,
                       location=(hi.x + 0.04, lo.y + 0.02, lo.z + (hi.z - lo.z) * 0.45))
     cage = common.material('cage', (0.3, 0.3, 0.33), metal=0.8, rough=0.4)
     ring = common.add('torus', 'cage', cage, major_radius=0.055, minor_radius=0.008, location=lamp.location)
@@ -119,7 +120,7 @@ def recipe_fairy(objs, spec, tier):
 
 def recipe_thorns(objs, spec, tier):
     lo, hi = common.bounds(objs)
-    thorn = common.material('thorn', (0.45, 0.12, 0.1), rough=0.6)
+    thorn = common.material('thorn', spec['colour'], rough=0.6)
     spikes = []
     for i in range(10):
         x = lo.x + (hi.x - lo.x) * ((i * 0.37) % 1)
@@ -131,7 +132,7 @@ def recipe_thorns(objs, spec, tier):
 
 
 def recipe_troll(objs, spec, tier):
-    common.tint(objs, (0.22, 0.28, 0.16), 0.3)
+    common.tint(objs, spec['colour'], 0.3)
     steel = common.material('steel', (0.55, 0.58, 0.62), metal=0.9, rough=0.35)
     lo, hi = common.bounds(objs)
     plate = common.add('cylinder', 'plate', steel, radius=(hi.x - lo.x) * 0.12, depth=0.04, vertices=6,
@@ -142,7 +143,7 @@ def recipe_troll(objs, spec, tier):
 
 def recipe_brood(objs, spec, tier):
     lo, hi = common.bounds(objs)
-    sac = common.material('sac', (0.7, 0.78, 0.5), emit=0.2, rough=0.8)
+    sac = common.material('sac', spec['colour'], emit=0.2, rough=0.8)
     r = (hi.y - lo.y) * 0.14
     body = common.add('uv_sphere', 'sac', sac, radius=r,
                       location=((lo.x + hi.x) / 2, hi.y - r, lo.z + (hi.z - lo.z) * 0.9))
@@ -155,17 +156,17 @@ def recipe_brood(objs, spec, tier):
 
 
 def recipe_spiderling(objs, spec, tier):
-    common.tint(objs, (0.55, 0.35, 0.2), 0.5)
+    common.tint(objs, spec['colour'], 0.5)
     return []
 
 
 def recipe_goblin(objs, spec, tier):
-    common.tint(objs, (0.35, 0.55, 0.2), 0.6)
+    common.tint(objs, spec['colour'], 0.6)
     return []
 
 
 def recipe_wraith(objs, spec, tier):
-    common.tint(objs, (0.35, 0.25, 0.5), 0.25)
+    common.tint(objs, spec['colour'], 0.25)
     lo, hi = common.bounds(objs)
     eye = common.material('wraitheye', (0.7, 0.9, 1.0), emit=4.0)
     cx = (lo.x + hi.x) / 2
@@ -174,7 +175,7 @@ def recipe_wraith(objs, spec, tier):
 
 
 def recipe_shaman(objs, spec, tier):
-    common.tint(objs, (0.45, 0.25, 0.6), 0.3)
+    common.tint(objs, spec['colour'], 0.3)
     lo, hi = common.bounds(objs)
     heal = common.material('heal', (0.35, 1.0, 0.55), emit=3.0)
     return [common.add('ico_sphere', 'heal', heal, radius=0.05, subdivisions=2,
@@ -182,7 +183,7 @@ def recipe_shaman(objs, spec, tier):
 
 
 def recipe_ogre(objs, spec, tier):
-    common.tint(objs, (0.45, 0.22, 0.12), 0.6)
+    common.tint(objs, spec['colour'], 0.6)
     lo, hi = common.bounds(objs)
     gold = common.material('crown', GOLD, metal=0.9, rough=0.3, emit=0.3)
     cx, cy = (lo.x + hi.x) / 2, (lo.y + hi.y) / 2
@@ -204,7 +205,7 @@ def recipe_ogre(objs, spec, tier):
 def recipe_heart_tree(objs, spec, tier):
     lo, hi = common.bounds(objs)
     common.tint(objs, (0.4, 0.85, 0.4), 0.55)
-    glow = common.material('heartglow', (1.0, 0.85, 0.45), emit=3.0)
+    glow = common.material('heartglow', spec['colour'], emit=3.0)
     cx, cy = (lo.x + hi.x) / 2, (lo.y + hi.y) / 2
     heart = common.add('uv_sphere', 'heart', glow, radius=0.06, location=(cx, lo.y + 0.12, lo.z + (hi.z - lo.z) * 0.3))
     motes = [common.add('uv_sphere', 'mote', glow, radius=0.018,
@@ -216,7 +217,7 @@ def recipe_heart_tree(objs, spec, tier):
 def recipe_portal(objs, spec, tier):
     common.tint(objs, (0.25, 0.22, 0.3), 0.4)
     lo, hi = common.bounds(objs)
-    void = common.material('void', (0.3, 0.05, 0.5), emit=0.7)
+    void = common.material('void', spec['colour'], emit=0.7)
     cx = (lo.x + hi.x) / 2
     disc = common.add('circle', 'void', void, radius=(hi.x - lo.x) * 0.3, vertices=32, fill_type='NGON',
                       location=(cx, (lo.y + hi.y) / 2, lo.z + (hi.z - lo.z) * 0.42))
@@ -251,14 +252,17 @@ def pedestal(colour, tier):
 
 
 def crown_of_light(objs, colour):
-    _, hi = common.bounds(objs)
+    """Level 3: a halo over the head (returned, to turn with the model) and motes around it."""
+    top = max(common.vertices(objs), key=lambda p: p.z)
     halo = common.material('halo', (1.0, 0.8, 0.35), emit=1.5, metal=0.8)
-    common.add('torus', 'halo', halo, major_radius=0.13, minor_radius=0.018, location=(0, 0, hi.z + 0.08))
+    ring = common.add('torus', 'halo', halo, major_radius=0.13, minor_radius=0.018,
+                      location=(top.x, top.y, top.z + 0.08))
     mote = common.material('mote', colour, emit=1.5)
     for i in range(6):
         a = i * math.pi / 3
         common.add('uv_sphere', 'mote', mote, radius=0.02,
                    location=(math.cos(a) * 0.32, math.sin(a) * 0.32, 0.25 + 0.15 * (i % 2)))
+    return [ring]
 
 
 def main():
@@ -281,6 +285,8 @@ def main():
     if spec.get('tiers', 1) > 1:
         size *= {1: 0.78, 2: 0.92, 3: 1.05}[tier]
     root = common.normalise(objs, size)
+    if 'recipe' in spec and spec['recipe'] not in RECIPES:
+        raise KeyError(f"unknown recipe {spec['recipe']!r} for {name}")
     recipe = RECIPES.get(spec.get('recipe', ''))
     if recipe:
         common.attach(recipe(objs, spec, tier), root)
@@ -290,7 +296,7 @@ def main():
         if spec.get('pedestal', True):
             pedestal(colour, tier)
         if tier == 3:
-            crown_of_light(objs, colour)
+            common.attach(crown_of_light(objs, colour), root)
         if spec.get('outline', True):
             common.outline(objs, (0.04, 0.05, 0.03, 1), 0.015)
     elif spec['side'] == 'evil':

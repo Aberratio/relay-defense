@@ -35,7 +35,7 @@
       "model": "poly-pizza/horse.glb",
       "side": "good",
       "tiers": 3,
-      "size": 1,
+      "size": 0.9,
       "yaw": 230,
       "colour": [0.75, 0.45, 1],
       "recipe": "unicorn"
@@ -81,7 +81,7 @@
       "tiers": 1,
       "size": 0.9,
       "yaw": 0,
-      "colour": [0.6, 0.15, 0.15],
+      "colour": [0.45, 0.12, 0.1],
       "recipe": "thorns"
     },
     {
@@ -144,7 +144,7 @@
       "side": "evil",
       "size": 1,
       "yaw": 20,
-      "colour": [0.6, 0.3, 0.2],
+      "colour": [0.45, 0.22, 0.12],
       "recipe": "ogre"
     },
     {
@@ -163,7 +163,7 @@
       "side": "scene",
       "size": 0.95,
       "yaw": 0,
-      "colour": [0.55, 0.15, 0.85],
+      "colour": [0.3, 0.05, 0.5],
       "recipe": "portal"
     }
   ]

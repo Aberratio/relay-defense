@@ -12,7 +12,7 @@ src/assets/sprites/  the rendered PNGs the game loads (committed; CI never runs 
 ```
 
 Render with `npm run sprites` (all) or `npm run sprites -- archer ogre` (some). It needs
-Blender 4.4 or newer; set `BLENDER` to its executable if it is not in the default place.
+Blender 4.2 or newer (made with 5.2); set `BLENDER` to its executable if it is not in the default place.
 
 ## Conventions
 

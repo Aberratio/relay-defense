@@ -27,5 +27,7 @@ export const SCENERY_ART = { core: 'heart-tree', gate: 'portal' } as const;
 /** File name (without extension) of a tower's sprite at a level (0-based). */
 export function towerSprite(kind: TowerKind, level: number): string {
   const art = TOWER_ART[kind];
-  return art.tiers > 1 ? `${art.sprite}-${Math.min(level, art.tiers - 1) + 1}` : art.sprite;
+  return art.tiers > 1
+    ? `${art.sprite}-${Math.max(0, Math.min(level, art.tiers - 1)) + 1}`
+    : art.sprite;
 }

@@ -63,11 +63,11 @@ Balancing a puzzle by hand is guesswork, so the repository carries its own tools
 src/engine/   pure TypeScript simulation, no DOM: map and flow-field routing, placement rules,
               agents, faults, shots, waves, economy; fixed 30 Hz tick; clone() for look-ahead
 src/levels/   the ten levels: ASCII maps, credits, waves, available agents, difficulty
-art/         CC0 source models, Blender scripts and the sprite manifest (art/README.md)
 src/render/   2D canvas renderer: cached background layer, interpolated movement, effects,
               particles; vector sprites shared with the UI icons; colours from the brand tokens
 src/ui/       menu, briefings, play screen, results, help; input (mouse, touch, keyboard);
               i18n (EN/PL); progress in localStorage; embed mode
+art/          CC0 source models, Blender scripts and the sprite manifest (art/README.md)
 scripts/      solver, probe, tuning, replay printer, screenshots, smoke test, guards
 tests/        engine mechanics, levels (solutions win, careless play loses), i18n, progress,
               language guard
@@ -135,7 +135,7 @@ Blender by `npm run sprites`; the PNGs are committed. How it works and the full 
 | unicorn                     | White Horse                                   | Quaternius | https://poly.pizza/m/bEdE4rmZy9                                  |
 | troll                       | Orc                                           | Quaternius | https://poly.pizza/m/5vO2YJsPEf                                  |
 | spiderling, brood mother    | Spider                                        | Quaternius | https://poly.pizza/m/yRYJiAJyiM                                  |
-| goblin                      | imp model                                     | Quaternius | https://poly.pizza/m/S7jYW6Amye                                  |
+| goblin                      | imp model (original title in art/README.md)   | Quaternius | https://poly.pizza/m/S7jYW6Amye                                  |
 | wraith                      | Ghost                                         | Quaternius | https://poly.pizza/m/Iip30bDHmu                                  |
 | shaman                      | Mushroom King                                 | Quaternius | https://poly.pizza/m/grnFTziU8u                                  |
 | ogre warlord                | Yeti                                          | Quaternius | https://poly.pizza/m/ceRHrn8HHE                                  |

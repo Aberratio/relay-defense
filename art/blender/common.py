@@ -13,7 +13,10 @@ import mathutils
 def reset_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
-    scene.render.engine = 'BLENDER_EEVEE'
+    try:
+        scene.render.engine = 'BLENDER_EEVEE'
+    except TypeError:  # Blender 4.2 to 4.5 call it EEVEE Next
+        scene.render.engine = 'BLENDER_EEVEE_NEXT'
     scene.render.film_transparent = True
     scene.view_settings.view_transform = 'Standard'
     world = bpy.data.worlds.new('world')
@@ -110,26 +113,35 @@ def vertices(objs):
 def bounds(objs):
     bpy.context.view_layer.update()
     points = vertices(objs)
+    if not points:
+        raise ValueError('the model has no mesh to measure')
     lo = mathutils.Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points)))
     hi = mathutils.Vector((max(p.x for p in points), max(p.y for p in points), max(p.z for p in points)))
     return lo, hi
 
 
 def normalise(objs, size):
-    """Wraps the import in an empty scaled so the largest side is `size`, centred, on the ground."""
-    root = bpy.data.objects.new('root', None)
-    bpy.context.scene.collection.objects.link(root)
+    """Fits the import into `size` (largest side), centred on the origin and standing on the ground.
+
+    Two empties: `centre` scales and shifts the model, `pivot` sits at the world origin and is the
+    one to turn, so a heading never moves the model off its pedestal.
+    """
+    pivot = bpy.data.objects.new('pivot', None)
+    centre = bpy.data.objects.new('centre', None)
+    bpy.context.scene.collection.objects.link(pivot)
+    bpy.context.scene.collection.objects.link(centre)
+    centre.parent = pivot
     for o in objs:
         if o.parent is None:
-            o.parent = root
+            o.parent = centre
     lo, hi = bounds(objs)
     extent = hi - lo
     k = size / max(extent.x, extent.y, extent.z)
-    root.scale = (k, k, k)
-    centre = (lo + hi) / 2
-    root.location = (-centre.x * k, -centre.y * k, -lo.z * k)
+    mid = (lo + hi) / 2
+    centre.scale = (k, k, k)
+    centre.location = (-mid.x * k, -mid.y * k, -lo.z * k)
     bpy.context.view_layer.update()
-    return root
+    return pivot
 
 
 def attach(objects, root):
