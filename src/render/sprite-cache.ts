@@ -95,8 +95,8 @@ export class SpriteCache {
 const bounds = new Map<string, { x: number; y: number; w: number; h: number }>();
 
 /**
- * The box around a sprite's visible pixels above its ground line, so an icon shows the figure and
- * not the frame, the pedestal or the ground ring.
+ * The box around a sprite's visible pixels down to its ground line, so an icon shows the figure
+ * and not the empty frame. The back half of a pedestal or a ground ring stays in the box.
  */
 function visibleBox(name: string, img: HTMLImageElement) {
   const hit = bounds.get(name);
@@ -106,7 +106,7 @@ function visibleBox(name: string, img: HTMLImageElement) {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext('2d');
   let box = { x: 0, y: 0, w, h };
   if (ctx) {
     ctx.drawImage(img, 0, 0);
@@ -124,8 +124,6 @@ function visibleBox(name: string, img: HTMLImageElement) {
           if (y < y0) y0 = y;
           if (y > y1) y1 = y;
         }
-    const ground = Math.round(h * (0.5 + GROUND + 0.03));
-    if (y1 > ground) y1 = ground;
     if (x1 >= x0 && y1 >= y0) box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
   }
   bounds.set(name, box);

@@ -62,5 +62,7 @@ describe('Polish plurals', () => {
     expect(a.sold(22)).toBe('Sprzedano za 22 monety.');
     expect(a.sold(25)).toBe('Sprzedano za 25 monet.');
     expect(a.sold(12)).toBe('Sprzedano za 12 monet.');
+    expect(a.waveClear(1, 1)).toBe('Fala 1 odparta. Premia: 1 moneta.');
+    expect(a.waveClear(1, 3)).toBe('Fala 1 odparta. Premia: 3 monety.');
   });
 });

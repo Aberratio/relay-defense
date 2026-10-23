@@ -83,7 +83,7 @@ const en = {
   rate: 'Shots / s',
   range: 'Range',
   chain: 'Chain',
-  blast: 'Blast radius',
+  blast: 'Impact radius',
   slow: 'Slow',
   boost: 'Boost',
   reveal: 'Reveal radius',
@@ -189,7 +189,7 @@ const en = {
     },
     beacon: {
       name: 'Lantern Fairy',
-      text: 'Her light reveals invisible monsters in range and strengthens the defenders on the eight tiles around her. Strength adds up.',
+      text: 'Her light reveals invisible monsters in range and boosts the damage of the defenders on the eight tiles around her. Boosts from several fairies add up.',
     },
     wall: {
       name: 'Thorns',
@@ -214,7 +214,7 @@ const en = {
     },
     colossus: {
       name: 'Ogre Warlord',
-      text: 'Heavy armour, enormous life, half as affected by slows, and he shields the monsters next to him.',
+      text: 'Heavy armour, a huge pool of life, half as affected by slows, and he shields the monsters next to him.',
     },
   } satisfies Record<EnemyKind, Named>,
   levelCopy: {
@@ -360,7 +360,7 @@ const pl: Strings = {
   speedStat: 'Prędkość',
   armour: 'Pancerz',
   ignoresArmour: 'ignorowany',
-  leak: 'Obrażenia Drzewa',
+  leak: 'Strata życia Drzewa',
   bounty: 'Nagroda',
   selectHint: 'Wybierz obrońcę do ustawienia albo kliknij obrońcę na planszy.',
   modes: {
@@ -394,7 +394,8 @@ const pl: Strings = {
   },
   victory: 'Drzewo ocalało',
   defeat: 'Drzewo upadło',
-  victoryText: (lives, max) => `Drzewo Serca przetrwało: zostało ${lives} z ${max} życia.`,
+  victoryText: (lives, max) =>
+    `Drzewo Serca przetrwało: zostało mu ${lives} z ${max} punktów życia.`,
   defeatText: (wave, total) => `Potwory przebiły się w fali ${wave} z ${total}.`,
   defeatHint:
     'Zajrzyj jeszcze raz do listy fal: który potwór się przebił i który obrońca na niego odpowiada?',
@@ -433,7 +434,7 @@ const pl: Strings = {
     },
     lance: {
       name: 'Jednorożec',
-      text: 'Promień z rogu przebija każdego potwora na swojej linii i ignoruje pancerz. Wolny: ustaw go wzdłuż prostej ścieżki.',
+      text: 'Promień z rogu przebija każdego potwora na swojej linii i ignoruje pancerz. Strzela wolno: ustaw go wzdłuż prostej ścieżki.',
     },
     mortar: {
       name: 'Ent',
@@ -441,11 +442,11 @@ const pl: Strings = {
     },
     throttle: {
       name: 'Driada',
-      text: 'Jej korzenie spowalniają każdego potwora w jej polu. Pola się nie sumują: działa silniejsze.',
+      text: 'Jej korzenie spowalniają każdego potwora w zasięgu. Pola się nie sumują: działa silniejsze.',
     },
     beacon: {
       name: 'Wróżka',
-      text: 'Jej światło odsłania niewidzialne potwory w zasięgu i wzmacnia obrońców na ośmiu polach wokół niej. Wzmocnienia się sumują.',
+      text: 'Jej światło odsłania niewidzialne potwory w zasięgu i wzmacnia obrażenia obrońców na ośmiu polach wokół niej. Wzmocnienia od kilku Wróżek się sumują.',
     },
     wall: { name: 'Ciernie', text: 'Tani żywopłot na łąkę. Służy do wydłużania trasy.' },
   },
@@ -460,14 +461,14 @@ const pl: Strings = {
       name: 'Upiór',
       text: 'Niewidzialny: nic go nie trafi, dopóki Wróżka go nie odsłoni.',
     },
-    splitter: { name: 'Pajęczyca', text: 'Pokonana pęka na trzy Pajączki.' },
+    splitter: { name: 'Pajęczyca', text: 'Pokonana rozpada się na trzy Pajączki.' },
     mender: {
       name: 'Szaman',
       text: 'Leczy potwory wokół siebie. Potrzebny jest skupiony ogień albo wyeliminowanie go w pierwszej kolejności.',
     },
     colossus: {
       name: 'Wódz ogrów',
-      text: 'Ciężki pancerz, ogromna wytrzymałość, spowolnienia działają na niego o połowę słabiej, osłania sąsiednie potwory.',
+      text: 'Ciężki pancerz, ogromny zapas życia, spowolnienia działają na niego o połowę słabiej, osłania sąsiednie potwory.',
     },
   },
   levelCopy: {
@@ -525,7 +526,7 @@ const pl: Strings = {
       name: 'Wódz ogrów',
       brief: 'Nadchodzi coś dużego, co osłania swoją eskortę. Wszystko, co już wiesz, naraz.',
       focus:
-        'Wódz ogrów: ciężki pancerz, ogromna wytrzymałość, odporny na spowolnienia, osłania sąsiadów.',
+        'Wódz ogrów: ciężki pancerz, ogromny zapas życia, odporny na spowolnienia, osłania sąsiadów.',
     },
   },
 };

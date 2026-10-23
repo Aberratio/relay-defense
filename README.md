@@ -9,7 +9,8 @@ levels, each built around one idea, every one of them proven winnable in CI.
 
 Play it on [kokot.it](https://kokot.it/en/projects/relay-defense/). The interface is in English and
 Polish. The repository keeps its first name, relay-defense; inside the code the defenders and
-monsters still go by their engine names (agents and faults), listed below.
+monsters still go by their engine names (agents and faults, listed below; the Heart Tree is the
+core, portals are gates, gold is credits, stone circles are sockets and paths are lanes).
 
 ## What makes it a logic game
 
