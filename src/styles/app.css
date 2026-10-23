@@ -78,10 +78,13 @@ kbd {
   display: none !important;
 }
 
+/* The negative margin keeps a hidden element at the end of the page from adding a pixel to the
+   document height, which the embed reports to its parent. */
 .visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: -1px;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
@@ -211,6 +214,7 @@ kbd {
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .stat-lives .stat-value {
@@ -1338,8 +1342,10 @@ kbd {
 /* ---- Narrow screens ------------------------------------------------------------------ */
 
 @media (max-width: 960px) {
+  /* minmax(0, 1fr), not 1fr: the column must not grow to the side panel's widest content, or the
+     board and the panel run past a narrow frame (326 px on a 360 px phone). */
   .screen-game {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .board-wrap {
@@ -1397,6 +1403,35 @@ kbd {
     margin-inline: calc(-1 * var(--gutter));
     border-inline: 0;
     border-radius: 0;
+  }
+}
+
+/* Up to 400 px, and in a 326 px frame (kokot.it on a 360 px phone), a defender's name next to its
+   shortcut key gets as little as 50 px. Phones have no number keys at hand, so the key gives way to
+   the name and the gaps tighten until the longest name (the Polish Unicorn, 80 px) fits. Narrower
+   still, a name breaks. */
+@media (max-width: 400px) {
+  .panel-build {
+    padding: var(--space-2);
+  }
+
+  .palette {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
+  .tool {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: var(--space-1);
+    padding-right: var(--space-1);
+  }
+
+  .tool-name {
+    overflow-wrap: anywhere;
+  }
+
+  .tool-key {
+    display: none;
   }
 }
 
