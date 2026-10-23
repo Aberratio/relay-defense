@@ -15,7 +15,8 @@ import {
 import { LEVELS } from '../levels/levels';
 import { BoardRenderer, type BoardView } from '../render/board';
 import { readPalette, type Palette } from '../render/palette';
-import { drawEnemy, drawTower } from '../render/sprites';
+import { ENEMY_ART, towerSprite } from '../render/art';
+import { paintIcon } from '../render/sprite-cache';
 import { strings, type Lang, type Strings } from './i18n';
 import { loadProgress, recordResult, starsFor, type Progress } from './progress';
 
@@ -483,20 +484,17 @@ export class App {
   // ---- Panels ----------------------------------------------------------------------------
 
   private towerIcon(kind: TowerKind, size: number, level = 0): HTMLCanvasElement {
-    return this.icon(size, (ctx, s) =>
-      drawTower(ctx, { kind, level, angle: -Math.PI / 4, time: 0.6, recoil: 0 }, s, this.palette),
-    );
+    return this.spriteIcon(size, towerSprite(kind, level));
   }
 
   private enemyIcon(kind: EnemyKind, size: number): HTMLCanvasElement {
-    const r = Math.min(0.36, ENEMIES[kind].radius * 1.15);
-    return this.icon(size, (ctx, s) =>
-      drawEnemy(
-        ctx,
-        { kind, r: r * s, heading: -Math.PI / 2, time: 0.4, revealed: true, flash: 0 },
-        this.palette,
-      ),
-    );
+    return this.spriteIcon(size, ENEMY_ART[kind].sprite);
+  }
+
+  private spriteIcon(size: number, name: string): HTMLCanvasElement {
+    const c = this.icon(size, () => undefined);
+    paintIcon(c, name);
+    return c;
   }
 
   private icon(
