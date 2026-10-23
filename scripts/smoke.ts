@@ -1,7 +1,7 @@
 // Browser smoke test of the production build: serves dist/ with `vite preview`, plays the first
 // level in Chromium through the UI, and checks the embed mode reports its height to a parent page.
 // Fails on any page error. Run after `npm run build`: `npm run smoke`.
-import { chromium } from 'playwright';
+import { chromium, type Frame, type Page } from 'playwright';
 import { preview } from 'vite';
 
 const server = await preview({ preview: { port: 4719, strictPort: true, host: 'localhost' } });
@@ -10,6 +10,51 @@ const browser = await chromium.launch();
 const errors: string[] = [];
 const fail = (msg: string) => {
   throw new Error(msg);
+};
+
+/** Frames the game in a parent page that sizes the frame to the reported height, as kokot.it does. */
+const mount = async (page: Page, width: number, src: string): Promise<Frame> => {
+  await page.evaluate(
+    ([src, width]) => {
+      const frame = document.createElement('iframe');
+      frame.src = src;
+      frame.style.cssText = `display:block;width:${width}px;height:400px;border:0`;
+      window.onmessage = (e: MessageEvent<{ type?: string; height?: number }>) => {
+        if (e.data?.type === 'relay-defense:height') frame.style.height = `${e.data.height}px`;
+      };
+      document.body.style.margin = '0';
+      document.body.replaceChildren(frame);
+    },
+    [src, width] as const,
+  );
+  return (await (await page.waitForSelector('iframe')).contentFrame()) ?? fail('no frame');
+};
+/** Two frames for the height report and the frame resize to settle. */
+const settle = async (frame: Frame) => {
+  await frame.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+  );
+  await frame.page().waitForTimeout(200);
+};
+const frameHeight = (page: Page) =>
+  page.evaluate(() => document.querySelector('iframe')?.getBoundingClientRect().height ?? 0);
+/** The open dialog sits wholly inside the frame: no scrolling inside the overlay or the frame. */
+const dialogFits = async (frame: Frame, what: string) => {
+  await settle(frame);
+  const r = await frame.evaluate(() => {
+    const overlay = document.getElementById('overlay') as HTMLElement;
+    const el = document.scrollingElement ?? document.documentElement;
+    const bottom = (document.getElementById('dialog') as HTMLElement).getBoundingClientRect()
+      .bottom;
+    return {
+      inner: overlay.scrollHeight - overlay.clientHeight,
+      outer: el.scrollHeight - el.clientHeight,
+      below: Math.ceil(bottom + el.scrollTop) - el.clientHeight,
+    };
+  });
+  if (r.inner > 0) fail(`${what} scrolls inside the overlay by ${r.inner} px`);
+  if (r.outer > 0) fail(`${what} scrolls inside the frame by ${r.outer} px`);
+  if (r.below > 0) fail(`${what} ends ${r.below} px below the frame`);
 };
 
 try {
@@ -92,24 +137,9 @@ try {
   narrow.on('pageerror', (e) => errors.push(e.message));
   await narrow.goto(base);
   for (const lang of ['pl', 'en']) {
-    await narrow.evaluate((src) => {
-      const frame = document.createElement('iframe');
-      frame.src = src;
-      frame.style.cssText = 'display:block;width:326px;height:400px;border:0';
-      window.onmessage = (e: MessageEvent<{ type?: string; height?: number }>) => {
-        if (e.data?.type === 'relay-defense:height') frame.style.height = `${e.data.height}px`;
-      };
-      document.body.style.margin = '0';
-      document.body.replaceChildren(frame);
-    }, `${base}?embed=1&lang=${lang}`);
-    const frame =
-      (await (await narrow.waitForSelector('iframe')).contentFrame()) ?? fail('no frame');
+    const frame = await mount(narrow, 326, `${base}?embed=1&lang=${lang}`);
     const overflow = async (screen: string) => {
-      // Two frames for the height report and the frame resize to settle.
-      await frame.evaluate(
-        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
-      );
-      await narrow.waitForTimeout(200);
+      await settle(frame);
       const { sw, cw, sh, ch, clipped } = await frame.evaluate(() => {
         const el = document.scrollingElement ?? document.documentElement;
         // A defender card whose name runs past its own box or into the next column.
@@ -143,9 +173,29 @@ try {
     await frame.locator('.level-node').first().click();
     await frame.locator('.dialog .btn-primary').click();
     await overflow('level 1');
+    // Picking a defender fills the info panel, which keeps room for it, so the frame does not
+    // grow and push the wave panel down under the player's finger.
+    const picked = await frameHeight(narrow);
+    await frame.locator('.tool').first().click();
+    await overflow('level 1 with a defender picked');
+    const after = await frameHeight(narrow);
+    if (after !== picked)
+      fail(`picking a defender (${lang}) resized the frame: ${picked} -> ${after}`);
+    // Help is taller than a level: the frame grows to hold it, nothing scrolls inside the frame.
+    await frame.locator('#help-open').click();
+    await dialogFits(frame, `help in level 1 (${lang})`);
   }
+
+  // Wide embed: kokot.it frames the game 966 px wide on a 1280 px screen, where a level is about
+  // 510 px tall and the longest briefing is not. Its Begin button must be in the frame.
+  const wide = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+  wide.on('pageerror', (e) => errors.push(e.message));
+  await wide.goto(base);
+  const wideFrame = await mount(wide, 966, `${base}?embed=1&lang=pl&level=split-brain`);
+  await wideFrame.locator('.dialog .btn-primary').waitFor();
+  await dialogFits(wideFrame, 'the split-brain briefing at 966 px');
   console.info(
-    `Smoke test passed: unlock path checked, level played, Siege opened, embed height ${height}px, narrow embed fits.`,
+    `Smoke test passed: unlock path checked, level played, Siege opened, embed height ${height}px, narrow embed fits, dialogs fit the frame.`,
   );
 } finally {
   await browser.close();
