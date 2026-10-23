@@ -23,6 +23,10 @@ Blender 4.2 or newer (made with 5.2); set `BLENDER` to its executable if it is n
   and adds a banner; level 3 adds a halo and motes. Monsters get a thin red ring on the ground.
 - Every defender has its own colour: archer green, druid blue, unicorn violet, ent amber,
   dryad pink, fairy gold.
+- The unicorn's levels also differ by the colour of the mane and tail: violet, magenta, then a
+  glowing gold.
+- Colours in the recipes are linear, as Blender takes them: sRGB 0.5 is about linear 0.21, so a
+  dark brown is written as something like (0.08, 0.045, 0.02).
 
 ## Sources
 
