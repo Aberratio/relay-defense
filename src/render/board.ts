@@ -4,7 +4,7 @@
 // simulation ticks at 30 Hz and the board interpolates positions between ticks, so motion stays
 // smooth at any refresh rate.
 import { centre, type Game, type GameEvent } from '../engine/game';
-import { DT, ENEMIES, TOWERS } from '../engine/stats';
+import { DT, ENEMIES, FOG_RANGE, TOWERS } from '../engine/stats';
 import type { Cell, TowerKind } from '../engine/types';
 import { ENEMY_ART, SCENERY_ART, TOWER_ART, enemyRing, levelSprites, towerSprite } from './art';
 import { Effects } from './effects';
@@ -195,8 +195,12 @@ export class BoardRenderer {
     if (ctx) {
       paintTerrain(ctx, game.grid, this.cell);
       const hazards = game.level.hazards;
-      if (hazards?.cracked || hazards?.fog)
-        paintHazards(ctx, this.cell, { cracked: hazards.cracked ?? [], fog: hazards.fog ?? [] });
+      if (hazards?.cracked || hazards?.fog || hazards?.fogLater)
+        paintHazards(ctx, this.cell, {
+          cracked: hazards.cracked ?? [],
+          fog: hazards.fog ?? [],
+          fogLater: hazards.fogLater ?? [],
+        });
     }
     return layer;
   }
@@ -653,7 +657,7 @@ export class BoardRenderer {
       if (ghost.kind !== 'wall')
         this.rangeRing(
           centre(cell),
-          TOWERS[ghost.kind].levels[0].range,
+          TOWERS[ghost.kind].levels[0].range * (this.game?.foggy(cell.x, cell.y) ? FOG_RANGE : 1),
           TOWERS[ghost.kind].minRange,
           colour,
         );

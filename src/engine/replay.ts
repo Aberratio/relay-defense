@@ -72,10 +72,11 @@ export function replayChain(
 ): ReplayResult[] {
   const out: ReplayResult[] = [];
   let carry: Carry | null = null;
-  levels.forEach((level, i) => {
+  levels.forEach((level) => {
     if (out.some((r) => r.outcome === 'lost')) return;
     const game = carry ? Game.resume(level, carry) : new Game(level);
-    const result = play(game, solutions[i] ?? { level: level.id, waves: [] }, maxTicks);
+    const solution = solutions.find((s) => s.level === level.id) ?? { level: level.id, waves: [] };
+    const result = play(game, solution, maxTicks);
     carry = result.game.carry();
     out.push(result);
   });

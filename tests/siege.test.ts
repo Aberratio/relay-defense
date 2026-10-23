@@ -162,6 +162,9 @@ describe('the campaign', () => {
 
   it('applies the hardships of the chapters so far', () => {
     expect(chapterLevel(0).hazards?.dormant).toEqual([1]);
+    expect(chapterLevel(0).hazards?.fogLater?.length).toBeGreaterThan(0);
+    expect(chapterLevel(0).hazards?.fog).toBeUndefined();
+    expect(chapterLevel(3).hazards?.fogLater).toBeUndefined();
     expect(chapterLevel(1).hazards?.dormant).toBeUndefined();
     expect(chapterLevel(1).hazards?.cracked).toHaveLength(1);
     expect(chapterLevel(2).hazards?.cracked).toBeUndefined();

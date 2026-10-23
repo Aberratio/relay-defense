@@ -68,7 +68,8 @@ adds a hardship:
 | The Warlord   | the Ogre Warlord comes, and every monster gains 2 armour                   |
 
 - **Nothing is hidden here either.** The sleeping portal and the cracked pass are on the board
-  from the first chapter, the briefing names what the next chapter brings, and the placement rule
+  from the first chapter, the fog still to come is a faint haze on the board, the first briefing
+  lists every hardship of the siege, and the placement rule
   already counts them: a maze may not seal the sleeping portal in, nor depend on the pass.
 - **A defeat restarts the chapter** from its checkpoint: the gold and defenders it began with.
 - **Every checkpoint can be won.** Before the first wave of a chapter, every defender brought into

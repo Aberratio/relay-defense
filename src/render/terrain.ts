@@ -24,6 +24,7 @@ const TERRAIN = {
   pebble: '#a58b65',
   crack: '#21160c',
   fog: 'rgba(214, 222, 232, 0.2)',
+  fogLater: 'rgba(214, 222, 232, 0.07)',
   fogEdge: 'rgba(214, 222, 232, 0)',
 } as const;
 
@@ -226,7 +227,7 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
 export function paintHazards(
   ctx: CanvasRenderingContext2D,
   s: number,
-  hazards: { cracked: Cell[]; fog: Cell[] },
+  hazards: { cracked: Cell[]; fog: Cell[]; fogLater: Cell[] },
 ): void {
   for (const { x, y } of hazards.cracked) {
     const cx = (x + 0.5) * s;
@@ -266,19 +267,25 @@ export function paintHazards(
       ctx.fill();
     }
   }
-  // Fog: soft overlapping puffs, so the patch reads as one bank of mist, not as tiles.
-  for (const { x, y } of hazards.fog) {
-    for (let k = 0; k < 3; k++) {
-      const px = (x + 0.15 + hash(x, y, 80 + k) * 0.7) * s;
-      const py = (y + 0.15 + hash(x, y, 83 + k) * 0.7) * s;
-      const r = s * (0.55 + hash(x, y, 86 + k) * 0.25);
-      const g = ctx.createRadialGradient(px, py, 0, px, py, r);
-      g.addColorStop(0, TERRAIN.fog);
-      g.addColorStop(1, TERRAIN.fogEdge);
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(px, py, r, 0, Math.PI * 2);
-      ctx.fill();
+  // Fog: soft overlapping puffs, so the patch reads as one bank of mist, not as tiles. Fog still
+  // to come is a faint haze of the same shape.
+  const banks: [Cell[], string][] = [
+    [hazards.fog, TERRAIN.fog],
+    [hazards.fogLater, TERRAIN.fogLater],
+  ];
+  for (const [cells, colour] of banks)
+    for (const { x, y } of cells) {
+      for (let k = 0; k < 3; k++) {
+        const px = (x + 0.15 + hash(x, y, 80 + k) * 0.7) * s;
+        const py = (y + 0.15 + hash(x, y, 83 + k) * 0.7) * s;
+        const r = s * (0.55 + hash(x, y, 86 + k) * 0.25);
+        const g = ctx.createRadialGradient(px, py, 0, px, py, r);
+        g.addColorStop(0, colour);
+        g.addColorStop(1, TERRAIN.fogEdge);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
-  }
 }

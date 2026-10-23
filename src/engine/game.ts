@@ -164,6 +164,8 @@ export class Game {
   private cracked: number[];
   /** Cells under fog (Siege), as grid indices. */
   private fogged: Set<number>;
+  /** Cells that fall under fog in a later chapter (Siege), as grid indices. */
+  private fogNext: Set<number>;
   /** Armour every enemy gets on top of its own (Siege). */
   private extraArmour: number;
 
@@ -176,6 +178,7 @@ export class Game {
     const at = (c: Cell) => index(this.grid, c.x, c.y);
     this.cracked = (level.hazards?.cracked ?? []).map(at);
     this.fogged = new Set((level.hazards?.fog ?? []).map(at));
+    this.fogNext = new Set((level.hazards?.fogLater ?? []).map(at));
     this.extraArmour = level.hazards?.armour ?? 0;
     this.blocked = new Array<boolean>(this.grid.width * this.grid.height).fill(false);
     this.dist = flowField(this.grid, this.blocked);
@@ -253,6 +256,11 @@ export class Game {
   /** Whether a cell is under fog (Siege). */
   foggy(x: number, y: number): boolean {
     return this.fogged.has(index(this.grid, x, y));
+  }
+
+  /** Whether a cell falls under fog later in the campaign (Siege). */
+  fogComing(x: number, y: number): boolean {
+    return this.fogNext.has(index(this.grid, x, y));
   }
 
   /** Whether a lane cell collapses later in the campaign (Siege). */
@@ -351,6 +359,8 @@ export class Game {
     if (!isBuildableTile(tile)) return 'tile';
     if (kind === 'wall' && tile !== '.') return 'tile';
     if (this.towerAt(x, y)) return 'occupied';
+    // A cell that will collapse cannot hold a defender (lanes never can; this keeps it so).
+    if (this.cracked.length && this.isCracked(x, y)) return 'tile';
     if (isWalkableTile(tile) && this.phase === 'wave') return 'wave';
     if (this.credits < TOWERS[kind].levels[0].cost) return 'funds';
     if (isWalkableTile(tile)) {

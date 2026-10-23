@@ -8,6 +8,7 @@ import {
   TARGET_MODES,
   type Cell,
   type EnemyKind,
+  type Carry,
   type LevelDef,
   type PlaceError,
   type TowerKind,
@@ -89,6 +90,20 @@ export function newKinds(index: number): { towers: TowerKind[]; enemies: EnemyKi
   };
 }
 
+/** The carry without the defenders that do not fit the chapter's board. */
+function fitting(level: LevelDef, carry: Carry): Carry {
+  const towers: Carry['towers'] = [];
+  for (const t of carry.towers) {
+    try {
+      Game.resume(level, { credits: 0, towers: [...towers, t] });
+      towers.push(t);
+    } catch {
+      // Left out: it does not fit this board.
+    }
+  }
+  return { credits: carry.credits, towers };
+}
+
 export class App {
   private lang: Lang;
   private t: Strings;
@@ -103,6 +118,8 @@ export class App {
   private chapter: number | null = null;
   /** Gold the Heart Tree added to reach the chapter's floor. */
   private topUp = 0;
+  /** What this chapter started from, so Restart rebuilds it even after the checkpoint moved. */
+  private chapterStart: Carry = EMPTY_CARRY;
   /** Defenders brought into this chapter: selling one is a sale, not an undo. */
   private carried = new Set<number>();
   private selectedKind: TowerKind | null = null;
@@ -294,7 +311,9 @@ export class App {
         const stars = this.siege.stars[i] ?? 0;
         const label = stars > 0 ? t.chapterLabel(i + 1, stars) : t.chapterOpen(i + 1);
         const current = cp?.chapter === i;
-        return h('li', { class: current ? 'siege-chapter is-current' : 'siege-chapter' }, [
+        const attrs: Record<string, string> = current ? { 'aria-current': 'step' } : {};
+        const cls = current ? 'siege-chapter is-current' : 'siege-chapter';
+        return h('li', { class: cls, attrs }, [
           h('span', { class: 'level-num', text: String(i + 1).padStart(2, '0') }),
           h('span', { class: 'siege-chapter-name', text: this.chapterCopy(i).name }),
           this.starsEl(stars, label),
@@ -325,18 +344,16 @@ export class App {
     );
   }
 
-  /** Starts the campaign from its first chapter; the stars won so far stay. */
+  /**
+   * Starts the campaign from its first chapter; the stars won so far stay. The old checkpoint is
+   * kept until the first wave starts, so a stray click on "start over" costs nothing.
+   */
   private beginSiege(): void {
-    this.siege = {
-      ...this.siege,
-      checkpoint: { version: SIEGE.version, chapter: 0, carry: EMPTY_CARRY },
-    };
-    saveSiege(this.siege);
-    this.openChapter(0);
+    this.openChapter(0, true, EMPTY_CARRY);
   }
 
   private restart(): void {
-    if (this.chapter !== null) this.openChapter(this.chapter, false);
+    if (this.chapter !== null) this.openChapter(this.chapter, false, this.chapterStart);
     else this.openLevel(this.levelIndex, false);
   }
 
@@ -387,22 +404,19 @@ export class App {
   }
 
   /**
-   * Opens a Siege chapter from the checkpoint: the gold and defenders the chapter before left. A
-   * checkpoint that no longer fits the map (it should not happen) gives way to an empty board,
-   * which the floor keeps winnable.
+   * Opens a Siege chapter, by default from the checkpoint: the gold and defenders the chapter
+   * before left. Defenders that no longer fit the map (a damaged save; it should not happen) are
+   * left out, and the floor keeps the chapter winnable without them.
    */
-  private openChapter(index: number, brief = true): void {
+  private openChapter(index: number, brief = true, from?: Carry): void {
     const level = SIEGE_CHAPTERS[index];
     if (!level) return;
     const cp = this.siege.checkpoint;
-    const carry = cp?.chapter === index ? cp.carry : EMPTY_CARRY;
-    let game: Game;
-    try {
-      game = Game.resume(level, carry);
-    } catch {
-      game = Game.resume(level, EMPTY_CARRY);
-    }
+    const wanted = from ?? (cp?.chapter === index ? cp.carry : EMPTY_CARRY);
+    const carry = fitting(level, wanted);
+    const game = Game.resume(level, carry);
     this.chapter = index;
+    this.chapterStart = carry;
     this.carried = new Set(game.towers.map((t) => t.id));
     this.topUp = index > 0 ? Math.max(0, game.credits - Math.floor(carry.credits)) : 0;
     this.enter(game, brief);
@@ -506,14 +520,28 @@ export class App {
           ...(index === 0 ? [h('p', { text: t.rules })] : []),
         ]),
         ...notes.map((text) => h('p', { class: 'dialog-note', text })),
-        ...(next
+        ...(index === 0
           ? [
-              h('p', { class: 'dialog-note siege-next' }, [
-                h('strong', { text: `${t.next}: ` }),
-                next.focus,
-              ]),
+              h('h3', { text: t.ahead }),
+              h(
+                'ul',
+                { class: 'siege-ahead' },
+                SIEGE_CHAPTERS.slice(1).map((_, i) =>
+                  h('li', {}, [
+                    h('strong', { text: `${this.chapterCopy(i + 1).name}: ` }),
+                    this.chapterCopy(i + 1).focus,
+                  ]),
+                ),
+              ),
             ]
-          : []),
+          : next
+            ? [
+                h('p', { class: 'dialog-note siege-next' }, [
+                  h('strong', { text: `${t.next}: ` }),
+                  next.focus,
+                ]),
+              ]
+            : []),
         h('div', { class: 'dialog-actions' }, [go]),
       ],
       go,
@@ -882,7 +910,7 @@ export class App {
       ]),
       this.statRows(tower.kind, tower.level, cost !== null ? tower.level + 1 : undefined, fog),
       ...(fog && tower.kind !== 'wall'
-        ? [h('p', { class: 'info-meta', text: this.t.siege.fog })]
+        ? [h('p', { class: 'info-meta', text: this.t.siege.fog(Math.round(FOG_RANGE * 100)) })]
         : []),
     ];
     if (!spec.passive) {
@@ -1101,6 +1129,12 @@ export class App {
   private startWave(): void {
     const game = this.game;
     if (!game || game.phase !== 'build' || this.dialogKind) return;
+    const cp = this.siege.checkpoint;
+    if (this.chapter === 0 && game.wave === 0 && cp && cp.chapter !== 0) {
+      // "Start over" takes effect here: the old checkpoint is given up for the new run.
+      this.siege = { ...this.siege, checkpoint: null };
+      saveSiege(this.siege);
+    }
     game.startWave();
     this.paused = false;
     this.renderControls();
@@ -1327,6 +1361,7 @@ export class App {
         spawn >= 0 && game.dormant(spawn) ? notes.dormant : '',
         game.isCracked(next.x, next.y) ? notes.cracked : '',
         game.foggy(next.x, next.y) ? notes.fog : '',
+        game.fogComing(next.x, next.y) ? notes.fogLater : '',
       ].filter(Boolean);
       this.announce(this.t.announce.cursor(next.x, next.y, [what, ...extra].join(', ')));
       return;

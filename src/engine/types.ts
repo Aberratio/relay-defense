@@ -91,6 +91,8 @@ export interface Hazards {
   cracked?: Cell[];
   /** Cells under fog: a tower standing on one reaches only `FOG_RANGE` of its range. */
   fog?: Cell[];
+  /** Cells that fall under fog in a later chapter: shown, with no effect yet. */
+  fogLater?: Cell[];
   /** Added to the armour of every enemy. */
   armour?: number;
 }

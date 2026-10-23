@@ -300,9 +300,14 @@ const en = {
     nextChapter: 'Next chapter',
     retry: 'Retry the chapter',
     allDone: 'The siege is broken and the Heart Tree stands. Thank you for playing.',
-    fog: 'In fog: 70% of the range',
-    tiles: { fog: 'in fog', cracked: 'cracked, it will collapse', dormant: 'sleeping portal' },
-    armour: (n: number) => `+${n} armour this chapter`,
+    fog: (pct: number) => `In fog: ${pct}% of the range`,
+    tiles: {
+      fog: 'in fog',
+      fogLater: 'fog comes here later',
+      cracked: 'cracked, it will collapse',
+      dormant: 'sleeping portal',
+    },
+    ahead: 'What the siege brings',
     chapters: {
       awakening: {
         name: 'Awakening',
@@ -326,7 +331,7 @@ const en = {
       fog: {
         name: 'Fog',
         brief: 'Fog rolls over the south-east of the meadow, where the two routes meet.',
-        focus: 'Fog covers the south-east: defenders standing in it reach only 70% of their range.',
+        focus: 'Fog covers the south-east and shortens the reach of every defender standing in it.',
       },
       warlord: {
         name: 'The Warlord',
@@ -613,9 +618,14 @@ const pl: Strings = {
     nextChapter: 'Następny rozdział',
     retry: 'Powtórz rozdział',
     allDone: 'Oblężenie odparte, Drzewo Serca ocalało. Dziękuję za grę.',
-    fog: 'We mgle: 70% zasięgu',
-    tiles: { fog: 'we mgle', cracked: 'popękana, zawali się', dormant: 'uśpiony portal' },
-    armour: (n) => `+${n} pancerza w tym rozdziale`,
+    fog: (pct) => `We mgle: ${pct}% zasięgu`,
+    tiles: {
+      fog: 'we mgle',
+      fogLater: 'tu później nadejdzie mgła',
+      cracked: 'popękana, zawali się',
+      dormant: 'uśpiony portal',
+    },
+    ahead: 'Co przyniesie oblężenie',
     chapters: {
       awakening: {
         name: 'Przebudzenie',
@@ -640,7 +650,7 @@ const pl: Strings = {
         name: 'Mgła',
         brief:
           'Mgła spływa na południowo-wschodnią część łąki, tam, gdzie spotykają się obie trasy.',
-        focus: 'Mgła okrywa południowy wschód: obrońcy stojący w niej mają tylko 70% zasięgu.',
+        focus: 'Mgła okrywa południowy wschód i skraca zasięg każdego obrońcy, który w niej stoi.',
       },
       warlord: {
         name: 'Wódz',

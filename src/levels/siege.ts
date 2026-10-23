@@ -37,7 +37,10 @@ export interface ChapterDef {
   waves: Wave[];
   /** Spawns (by index) that wake up in this chapter. */
   opens?: number[];
-  /** Lane cells that turn to rock when this chapter begins. */
+  /**
+   * Lane cells that turn to rock when this chapter begins. They must be lanes (`=`): nothing
+   * can stand on a lane, so no carried defender is ever buried.
+   */
   collapse?: Cell[];
   /** Cells that fall under fog when this chapter begins. */
   fog?: Cell[];
@@ -196,7 +199,7 @@ export function chapterId(index: number): string {
 /**
  * Chapter `index` as an ordinary level: the map with every collapse so far turned to rock, the
  * portals that have not woken yet marked dormant, the lanes that will still collapse marked
- * cracked, and the fog and armour of every chapter so far.
+ * cracked, the fog and armour of every chapter so far, and the fog still to come.
  */
 export function chapterLevel(index: number, campaign: CampaignDef = SIEGE): LevelDef {
   const chapter = campaign.chapters[index];
@@ -211,6 +214,7 @@ export function chapterLevel(index: number, campaign: CampaignDef = SIEGE): Leve
   const dormant = future.flatMap((ch) => ch.opens ?? []);
   const cracked = future.flatMap((ch) => ch.collapse ?? []);
   const fog = past.flatMap((ch) => ch.fog ?? []);
+  const fogLater = future.flatMap((ch) => ch.fog ?? []);
   const armour = past.reduce((sum, ch) => sum + (ch.armour ?? 0), 0);
   return {
     id: chapterId(index),
@@ -225,6 +229,7 @@ export function chapterLevel(index: number, campaign: CampaignDef = SIEGE): Leve
       ...(dormant.length ? { dormant } : {}),
       ...(cracked.length ? { cracked } : {}),
       ...(fog.length ? { fog } : {}),
+      ...(fogLater.length ? { fogLater } : {}),
       ...(armour ? { armour } : {}),
     },
   };
