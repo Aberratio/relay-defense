@@ -734,8 +734,11 @@ export class App {
         : opener;
     const back = same?.isConnected && !same.closest('[hidden]') ? same : null;
     this.opener = null;
-    if (this.game) this.canvas.focus({ preventScroll: true });
-    else back?.focus({ preventScroll: true });
+    const target = this.game ? this.canvas : back;
+    target?.focus({ preventScroll: true });
+    // In a frame a long dialog grows the page around it, and the reader may have scrolled down to
+    // its last button: once the frame shrinks back, they would be left below the game.
+    if (this.opts.embed) target?.scrollIntoView({ block: 'nearest' });
   }
 
   /** Everything behind an open dialog is out of reach for focus and assistive technology. */
