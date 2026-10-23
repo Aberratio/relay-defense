@@ -17,7 +17,7 @@ export function glow(ctx: Ctx, x: number, y: number, r: number, color: string, a
   ctx.fill();
 }
 
-export function polygon(ctx: Ctx, sides: number, r: number, rotation = 0): void {
+function polygon(ctx: Ctx, sides: number, r: number, rotation = 0): void {
   ctx.beginPath();
   for (let i = 0; i < sides; i++) {
     const a = rotation + (i / sides) * Math.PI * 2;
@@ -38,13 +38,13 @@ export function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, 
 }
 
 /** Colour family of a tower: Signal for damage, Ion for support. */
-export function towerColour(kind: TowerKind, p: Palette): string {
+function towerColour(kind: TowerKind, p: Palette): string {
   if (kind === 'throttle' || kind === 'beacon') return p.ion;
   if (kind === 'wall') return p.lineStrong;
   return p.signal;
 }
 
-export function enemyColour(kind: EnemyKind, p: Palette): string {
+function enemyColour(kind: EnemyKind, p: Palette): string {
   switch (kind) {
     case 'bulwark':
       return p.warning;

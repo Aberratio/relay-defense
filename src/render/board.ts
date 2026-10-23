@@ -6,10 +6,10 @@
 import { centre, type Game, type GameEvent } from '../engine/game';
 import { DT, ENEMIES, TOWERS } from '../engine/stats';
 import type { Cell, TowerKind } from '../engine/types';
-import { ENEMY_ART, SCENERY_ART, TOWER_ART, enemyRing, towerSprite } from './art';
+import { ENEMY_ART, SCENERY_ART, TOWER_ART, enemyRing, levelSprites, towerSprite } from './art';
 import { Effects } from './effects';
 import { alpha, type Palette } from './palette';
-import { FRAME, GROUND, SpriteCache } from './sprite-cache';
+import { FRAME, GROUND, SQUASH, SpriteCache, TILT, preloadSprites } from './sprite-cache';
 import { drawEnemy, drawTower, glow, roundRect } from './sprites';
 import { paintTerrain } from './terrain';
 
@@ -28,12 +28,25 @@ interface Snapshot {
   y: number;
 }
 
+type Tower = Game['towers'][number];
+type Enemy = Game['enemies'][number];
+
+/** One thing standing on the board, in the order it is drawn. Reused from frame to frame. */
+interface Actor {
+  /** Ground line in cells: the sort key. */
+  y: number;
+  x: number;
+  kind: 'gate' | 'core' | 'tower' | 'fault';
+  tower: Tower | null;
+  enemy: Enemy | null;
+}
+
 /** Pedestal radius in model units (art/blender/render_sprite.py). */
 const PEDESTAL = 0.36;
 /** How much of a cell a defender's pedestal spans. */
 const PEDESTAL_SPAN = 0.94;
-/** Ortho camera tilt: a height h on screen is h times this. */
-const TILT = Math.cos((35 * Math.PI) / 180);
+/** A character turns only when its aim or walk is clearly to one side, so it does not flicker. */
+const TURN = 0.25;
 
 /** Pixels per model unit for a defender, so its pedestal fills the tile. */
 function towerScale(kind: TowerKind, s: number): number {
@@ -50,7 +63,14 @@ export class BoardRenderer {
   private prev = new Map<number, Snapshot>();
   private fired = new Map<number, number>();
   private hits = new Map<number, number>();
+  /** Last facing of each tower and fault: true when it looks left. */
+  private facing = new Map<string, boolean>();
   private sprites = new SpriteCache();
+  private actors: Actor[] = [];
+  private actorCount = 0;
+  /** Faults whose health bar goes on top once every character is drawn. */
+  private bars: { enemy: Enemy; x: number; y: number }[] = [];
+  private barCount = 0;
   /** Game-time clock used for recoil and hit flashes (seconds). */
   private clock = 0;
 
@@ -70,8 +90,10 @@ export class BoardRenderer {
     this.prev.clear();
     this.fired.clear();
     this.hits.clear();
+    this.facing.clear();
     this.effects.clear();
     this.layer = null;
+    preloadSprites(levelSprites(game.level));
   }
 
   /** Sizes the backing store to the canvas's CSS box. */
@@ -176,20 +198,33 @@ export class BoardRenderer {
   // ---- Sprites ----------------------------------------------------------------------------
 
   /**
-   * Draws a sprite standing at (x, y) in pixels, scaled to `unit` pixels per model unit.
-   * Returns false while the image is still loading.
+   * Draws a sprite standing at (x, y) in pixels, scaled to `unit` pixels per model unit, on whole
+   * pixels so the cached bitmap is copied, not resampled. False while the image is loading.
    */
   private blit(name: string, unit: number, x: number, y: number, flip = false): boolean {
-    const size = FRAME * unit;
-    const img = this.sprites.get(name, size);
-    if (!img) return false;
+    const sprite = this.sprites.get(name, FRAME * unit);
+    if (!sprite) return false;
+    const { img, px } = sprite;
+    const top = Math.round(y - px * (0.5 + GROUND));
+    if (!flip) {
+      this.ctx.drawImage(img, Math.round(x - px / 2), top, px, px);
+      return true;
+    }
     const ctx = this.ctx;
     ctx.save();
-    ctx.translate(x, y);
-    if (flip) ctx.scale(-1, 1);
-    ctx.drawImage(img, -size / 2, -size * (0.5 + GROUND), size, size);
+    ctx.translate(Math.round(x), 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, -Math.round(px / 2), top, px, px);
     ctx.restore();
     return true;
+  }
+
+  /** Whether a character looks left, changing only when `cos` points clearly to one side. */
+  private looksLeft(key: string, cos: number): boolean {
+    const was = this.facing.get(key) ?? false;
+    const now = cos < -TURN ? true : cos > TURN ? false : was;
+    this.facing.set(key, now);
+    return now;
   }
 
   // ---- Dynamic layers ---------------------------------------------------------------------
@@ -257,7 +292,7 @@ export class BoardRenderer {
         ctx.arc(c.x * s, c.y * s, r, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
-        // Threads of light to the agents it boosts.
+        // Threads of light to the defenders it strengthens.
         ctx.strokeStyle = alpha(colour, 0.7);
         ctx.lineWidth = Math.max(1, s * 0.035);
         for (const o of game.towers) {
@@ -308,55 +343,80 @@ export class BoardRenderer {
     ctx.restore();
   }
 
-  /** Gates, the core, defenders and faults, sorted by their ground line. */
+  private addActor(
+    y: number,
+    x: number,
+    kind: Actor['kind'],
+    tower: Tower | null,
+    enemy: Enemy | null,
+  ) {
+    let a = this.actors[this.actorCount];
+    if (!a) {
+      a = { y, x, kind, tower, enemy };
+      this.actors.push(a);
+    } else {
+      a.y = y;
+      a.x = x;
+      a.kind = kind;
+      a.tower = tower;
+      a.enemy = enemy;
+    }
+    this.actorCount++;
+  }
+
+  /** Gates, the core, defenders and faults, sorted by their ground line; health bars on top. */
   private drawActors(game: Game, lerp: number, time: number, view: BoardView): void {
-    const actors: { y: number; draw: () => void }[] = [];
-    for (const sp of game.grid.spawns) {
-      const c = centre(sp);
-      actors.push({ y: c.y, draw: () => this.drawGate(c, time) });
-    }
-    const core = centre(game.grid.core);
-    actors.push({ y: core.y, draw: () => this.drawCore(game, core, time) });
-    for (const t of game.towers) {
-      const c = centre(t);
-      actors.push({ y: c.y, draw: () => this.drawTower(t, c, time, view) });
-    }
+    this.actorCount = 0;
+    this.barCount = 0;
+    for (const sp of game.grid.spawns) this.addActor(sp.y + 0.5, sp.x + 0.5, 'gate', null, null);
+    const core = game.grid.core;
+    this.addActor(core.y + 0.5, core.x + 0.5, 'core', null, null);
+    for (const t of game.towers) this.addActor(t.y + 0.5, t.x + 0.5, 'tower', t, null);
     for (const e of game.enemies) {
       const prev = this.prev.get(e.id);
       const x = prev ? prev.x + (e.x - prev.x) * lerp : e.x;
       const y = prev ? prev.y + (e.y - prev.y) * lerp : e.y;
-      actors.push({ y, draw: () => this.drawFault(e, x, y, time) });
+      this.addActor(y, x, 'fault', null, e);
     }
-    actors.sort((a, b) => a.y - b.y);
-    for (const a of actors) a.draw();
+    const live = this.actors.slice(0, this.actorCount).sort((a, b) => a.y - b.y);
+    for (const a of live) {
+      if (a.kind === 'gate') this.drawGate(a.x, a.y, time);
+      else if (a.kind === 'core') this.drawCore(game, a.x, a.y, time);
+      else if (a.kind === 'tower' && a.tower) this.drawTower(a.tower, a.x, a.y, time, view);
+      else if (a.kind === 'fault' && a.enemy) this.drawFault(a.enemy, a.x, a.y, time);
+    }
+    for (let i = 0; i < this.barCount; i++) {
+      const bar = this.bars[i];
+      if (bar) this.drawHealth(bar.enemy, bar.x, bar.y);
+    }
   }
 
-  private drawGate(c: { x: number; y: number }, time: number): void {
+  private drawGate(cx: number, cy: number, time: number): void {
     const s = this.cell;
     const t = this.reducedMotion ? 0 : time;
-    glow(this.ctx, c.x * s, c.y * s, s * (0.8 + 0.08 * Math.sin(t * 2)), '#8a3bd1', 0.35);
-    if (!this.blit(SCENERY_ART.gate, s / 0.95, c.x * s, c.y * s)) {
+    glow(this.ctx, cx * s, cy * s, s * (0.8 + 0.08 * Math.sin(t * 2)), '#8a3bd1', 0.35);
+    if (!this.blit(SCENERY_ART.gate, s / 0.95, cx * s, cy * s)) {
       const ctx = this.ctx;
       ctx.strokeStyle = alpha(this.palette.danger, 0.85);
       ctx.lineWidth = Math.max(1.2, s * 0.045);
       ctx.beginPath();
-      ctx.arc(c.x * s, c.y * s, s * 0.32, 0, Math.PI * 2);
+      ctx.arc(cx * s, cy * s, s * 0.32, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
 
-  private drawCore(game: Game, c: { x: number; y: number }, time: number): void {
+  private drawCore(game: Game, cx: number, cy: number, time: number): void {
     const ctx = this.ctx;
     const s = this.cell;
     const p = this.palette;
     const t = this.reducedMotion ? 0 : time;
     const health = game.lives / game.maxLives;
     const beat = 0.5 + 0.5 * Math.sin(t * 2.2);
-    glow(ctx, c.x * s, c.y * s, s * (1.0 + beat * 0.15), '#ffd97a', 0.3);
-    // Integrity ring on the ground: the share of lives left.
+    glow(ctx, cx * s, cy * s, s * (1.0 + beat * 0.15), '#ffd97a', 0.3);
+    // Life ring on the ground: the share of lives left.
     ctx.save();
-    ctx.translate(c.x * s, c.y * s);
-    ctx.scale(1, 0.62);
+    ctx.translate(cx * s, cy * s);
+    ctx.scale(1, SQUASH);
     ctx.lineWidth = Math.max(2, s * 0.07);
     ctx.strokeStyle = alpha(p.bgDeep, 0.7);
     ctx.beginPath();
@@ -367,37 +427,30 @@ export class BoardRenderer {
     ctx.arc(0, 0, s * 0.46, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * health);
     ctx.stroke();
     ctx.restore();
-    this.blit(SCENERY_ART.core, s * 1.35, c.x * s, c.y * s + s * 0.1);
+    this.blit(SCENERY_ART.core, s * 1.35, cx * s, cy * s + s * 0.1);
   }
 
-  private drawTower(
-    t: Game['towers'][number],
-    c: { x: number; y: number },
-    time: number,
-    view: BoardView,
-  ): void {
+  private drawTower(t: Tower, cx: number, cy: number, time: number, view: BoardView): void {
     const ctx = this.ctx;
     const s = this.cell;
     const since = this.clock - (this.fired.get(t.id) ?? -10);
     const recoil = Math.max(0, 1 - since / 0.18);
     const art = TOWER_ART[t.kind];
-    const x = c.x * s;
-    const y = c.y * s;
-    if (view.selected === t.id) {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(1, 0.62);
-      ctx.strokeStyle = this.palette.text;
-      ctx.lineWidth = Math.max(1.5, s * 0.05);
-      ctx.beginPath();
-      ctx.arc(0, 0, s * 0.52, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
+    const x = cx * s;
+    const y = cy * s;
+    if (view.selected === t.id) this.groundRing(x, y, s * 0.52, this.palette.text, 0.05);
     // Defenders turn towards their target; the sprites face right unless marked otherwise.
-    const flip = t.kind !== 'wall' && Math.cos(t.angle) < 0 !== !!art.facesLeft;
+    const left = t.kind !== 'wall' && this.looksLeft(`t${t.id}`, Math.cos(t.angle));
     const lift = this.reducedMotion ? 0 : recoil * s * 0.04;
-    if (!this.blit(towerSprite(t.kind, t.level), towerScale(t.kind, s), x, y - lift, flip)) {
+    if (
+      !this.blit(
+        towerSprite(t.kind, t.level),
+        towerScale(t.kind, s),
+        x,
+        y - lift,
+        left !== !!art.facesLeft,
+      )
+    ) {
       ctx.save();
       ctx.translate(x, y);
       drawTower(
@@ -416,7 +469,7 @@ export class BoardRenderer {
     }
   }
 
-  private drawFault(e: Game['enemies'][number], x: number, y: number, time: number): void {
+  private drawFault(e: Enemy, x: number, y: number, time: number): void {
     const ctx = this.ctx;
     const s = this.cell;
     const p = this.palette;
@@ -431,49 +484,68 @@ export class BoardRenderer {
     const py = y * s;
     const t = this.reducedMotion ? 0 : time + e.id;
     const cloaked = !!spec.cloaked && !e.revealed;
+    const left = this.looksLeft(`e${e.id}`, Math.cos(heading));
 
-    ctx.save();
-    if (cloaked) ctx.globalAlpha = 0.3 + 0.12 * Math.sin(t * 6);
     if (e.slow < 0.999) this.groundRing(px, py, ring * 1.1, alpha(TOWER_ART.throttle.colour, 0.9));
     if (e.shield > 0) this.groundRing(px, py, ring * 1.3, alpha(p.warning, 0.8));
-    const flip = Math.cos(heading) < 0;
-    const drawn = this.blit(art.sprite, unit, px, py, flip);
+    ctx.save();
+    if (cloaked) ctx.globalAlpha = 0.3 + 0.12 * Math.sin(t * 6);
+    const drawn = this.blit(art.sprite, unit, px, py, left);
     if (drawn && flash > 0) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha *= flash * 0.6;
-      this.blit(art.sprite, unit, px, py, flip);
-      ctx.globalCompositeOperation = 'source-over';
+      this.blit(art.sprite, unit, px, py, left);
     }
+    ctx.restore();
     if (!drawn) {
+      // The vector fallback fades a cloaked fault by itself.
+      ctx.save();
       ctx.translate(px, py);
       drawEnemy(
         ctx,
         { kind: e.kind, r: spec.radius * s, heading, time: t, revealed: e.revealed, flash },
         p,
       );
+      ctx.restore();
     }
-    ctx.restore();
-
     if (e.hp < e.maxHp && !cloaked) {
-      const w = Math.max(s * 0.5, ring * 1.6);
-      const h = Math.max(3, s * 0.07);
-      const bx = px - w / 2;
-      const by = py - art.size * unit * TILT - s * 0.12;
-      ctx.fillStyle = alpha(p.bgDeep, 0.85);
-      ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
-      const k = e.hp / e.maxHp;
-      ctx.fillStyle = k > 0.5 ? p.success : k > 0.25 ? p.warning : p.danger;
-      ctx.fillRect(bx, by, w * k, h);
+      let bar = this.bars[this.barCount];
+      if (!bar) {
+        bar = { enemy: e, x, y };
+        this.bars.push(bar);
+      }
+      bar.enemy = e;
+      bar.x = x;
+      bar.y = y;
+      this.barCount++;
     }
   }
 
-  private groundRing(x: number, y: number, r: number, colour: string): void {
+  private drawHealth(e: Enemy, x: number, y: number): void {
+    const ctx = this.ctx;
+    const s = this.cell;
+    const p = this.palette;
+    const ring = ENEMIES[e.kind].radius * s * 1.5;
+    const unit = ring / enemyRing(e.kind);
+    const w = Math.max(s * 0.5, ring * 1.6);
+    const h = Math.max(3, s * 0.07);
+    const bx = x * s - w / 2;
+    const by = y * s - ENEMY_ART[e.kind].size * unit * TILT - s * 0.12;
+    ctx.fillStyle = alpha(p.bgDeep, 0.85);
+    ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
+    const k = e.hp / e.maxHp;
+    ctx.fillStyle = k > 0.5 ? p.success : k > 0.25 ? p.warning : p.danger;
+    ctx.fillRect(bx, by, w * k, h);
+  }
+
+  /** A ring lying on the ground around (x, y): `r` is its radius across. */
+  private groundRing(x: number, y: number, r: number, colour: string, width = 0.04): void {
     const ctx = this.ctx;
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(1, 0.6);
+    ctx.scale(1, SQUASH);
     ctx.strokeStyle = colour;
-    ctx.lineWidth = Math.max(1.5, this.cell * 0.04);
+    ctx.lineWidth = Math.max(1.5, this.cell * width) / SQUASH;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
@@ -488,7 +560,7 @@ export class BoardRenderer {
       const x = prev ? prev.x + (shot.x - prev.x) * lerp : shot.x;
       const y = prev ? prev.y + (shot.y - prev.y) * lerp : shot.y;
       if (shot.kind === 'bolt') {
-        // An arrow: a shaft along the flight, a pale head and a green fletching glint.
+        // An arrow: a shaft along the flight, a pale head and a green fletching.
         const px = prev?.x ?? shot.from.x;
         const py = prev?.y ?? shot.from.y;
         const a = Math.atan2(y - py, x - px);
@@ -523,7 +595,7 @@ export class BoardRenderer {
         ctx.stroke();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
         ctx.beginPath();
-        ctx.ellipse(x * s, y * s, s * 0.1, s * 0.05, 0, 0, Math.PI * 2);
+        ctx.ellipse(x * s, y * s, s * 0.1, s * 0.1 * SQUASH, 0, 0, Math.PI * 2);
         ctx.fill();
         const r = Math.max(2, s * 0.09);
         ctx.fillStyle = '#7d7a78';

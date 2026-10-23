@@ -3,7 +3,7 @@
 // colours belong to the game world only; the interface around the board keeps the brand palette.
 import { tileAt, type Grid } from '../engine/grid';
 
-export const GROUND = {
+const TERRAIN = {
   forest: '#141d10',
   rock: '#26262c',
   rockLight: '#33333a',
@@ -24,7 +24,7 @@ export const GROUND = {
 } as const;
 
 /** A repeatable pseudo-random number in [0, 1) for a tile and a salt. */
-export function hash(x: number, y: number, salt = 0): number {
+function hash(x: number, y: number, salt = 0): number {
   let h = (x * 374761393 + y * 668265263 + salt * 2147483647) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
@@ -33,18 +33,18 @@ export function hash(x: number, y: number, salt = 0): number {
 export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: number): void {
   const { width, height } = grid;
   const tile = (x: number, y: number) => tileAt(grid, x, y);
-  ctx.fillStyle = GROUND.forest;
+  ctx.fillStyle = TERRAIN.forest;
   ctx.fillRect(0, 0, width * s, height * s);
 
   // Rock: stone with moss patches and a lit rim where it meets open ground.
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       if (tile(x, y) !== '#') continue;
-      ctx.fillStyle = GROUND.rock;
+      ctx.fillStyle = TERRAIN.rock;
       ctx.fillRect(x * s, y * s, s + 0.5, s + 0.5);
       for (let k = 0; k < 3; k++) {
         if (hash(x, y, k) < 0.55) continue;
-        ctx.fillStyle = hash(x, y, k + 9) < 0.5 ? GROUND.rockMoss : GROUND.rockLight;
+        ctx.fillStyle = hash(x, y, k + 9) < 0.5 ? TERRAIN.rockMoss : TERRAIN.rockLight;
         ctx.beginPath();
         ctx.ellipse(
           (x + 0.2 + hash(x, y, k + 3) * 0.6) * s,
@@ -59,7 +59,7 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
       }
     }
   }
-  ctx.strokeStyle = GROUND.rockLight;
+  ctx.strokeStyle = TERRAIN.rockLight;
   ctx.lineWidth = Math.max(1, s * 0.05);
   ctx.lineCap = 'round';
   ctx.beginPath();
@@ -79,11 +79,11 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
     for (let x = 0; x < width; x++) {
       if (tile(x, y) === '#') continue;
       const v = hash(x, y, 1);
-      ctx.fillStyle = v < 0.3 ? GROUND.grassDark : v > 0.75 ? GROUND.grassLight : GROUND.grass;
+      ctx.fillStyle = v < 0.3 ? TERRAIN.grassDark : v > 0.75 ? TERRAIN.grassLight : TERRAIN.grass;
       ctx.fillRect(x * s, y * s, s + 0.5, s + 0.5);
     }
   }
-  ctx.strokeStyle = GROUND.tuft;
+  ctx.strokeStyle = TERRAIN.tuft;
   ctx.lineWidth = Math.max(1, s * 0.025);
   ctx.beginPath();
   for (let y = 0; y < height; y++) {
@@ -107,7 +107,7 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
     for (let x = 0; x < width; x++) {
       if (tile(x, y) !== '.' || hash(x, y, 40) < 0.7) continue;
       ctx.fillStyle =
-        GROUND.flowers[Math.floor(hash(x, y, 41) * GROUND.flowers.length)] ?? GROUND.tuft;
+        TERRAIN.flowers[Math.floor(hash(x, y, 41) * TERRAIN.flowers.length)] ?? TERRAIN.tuft;
       for (let k = 0; k < 3; k++) {
         ctx.beginPath();
         ctx.arc(
@@ -123,7 +123,7 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
   }
 
   // A faint grid on the open floor, so placement stays readable.
-  ctx.strokeStyle = GROUND.grid;
+  ctx.strokeStyle = TERRAIN.grid;
   ctx.lineWidth = Math.max(1, s * 0.015);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -138,7 +138,7 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
       if (tile(x, y) !== '^') continue;
       const cx = (x + 0.5) * s;
       const cy = (y + 0.5) * s;
-      ctx.fillStyle = GROUND.moss;
+      ctx.fillStyle = TERRAIN.moss;
       ctx.beginPath();
       ctx.ellipse(cx, cy, s * 0.38, s * 0.34, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -147,11 +147,11 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
         const sx = cx + Math.cos(a) * s * 0.38;
         const sy = cy + Math.sin(a) * s * 0.34;
         const r = s * (0.05 + hash(x, y, 51 + k) * 0.025);
-        ctx.fillStyle = GROUND.stoneDark;
+        ctx.fillStyle = TERRAIN.stoneDark;
         ctx.beginPath();
         ctx.ellipse(sx, sy + r * 0.35, r * 1.1, r * 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = GROUND.stone;
+        ctx.fillStyle = TERRAIN.stone;
         ctx.beginPath();
         ctx.ellipse(sx, sy, r, r * 0.75, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -190,10 +190,10 @@ export function paintTerrain(ctx: CanvasRenderingContext2D, grid: Grid, s: numbe
     }
     ctx.stroke();
   };
-  stroke(s * 0.86, GROUND.pathEdge);
-  stroke(s * 0.74, GROUND.path);
-  stroke(s * 0.5, GROUND.pathLight);
-  ctx.fillStyle = GROUND.pebble;
+  stroke(s * 0.86, TERRAIN.pathEdge);
+  stroke(s * 0.74, TERRAIN.path);
+  stroke(s * 0.5, TERRAIN.pathLight);
+  ctx.fillStyle = TERRAIN.pebble;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       if (tile(x, y) !== '=') continue;

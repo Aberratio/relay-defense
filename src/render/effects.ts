@@ -4,8 +4,8 @@
 import type { GameEvent } from '../engine/game';
 import type { Point } from '../engine/types';
 import { alpha, type Palette } from './palette';
-import { TOWER_ART } from './art';
-import { enemyColour, glow } from './sprites';
+import { ENEMY_ART, TOWER_ART } from './art';
+import { glow } from './sprites';
 
 interface Particle {
   x: number;
@@ -124,7 +124,7 @@ export class Effects {
         case 'kill':
           this.burst(
             e.at,
-            enemyColour(e.kind, p),
+            ENEMY_ART[e.kind].colour,
             e.kind === 'colossus' ? 60 : 14,
             e.kind === 'colossus' ? 4 : 2.6,
             0.06,
@@ -134,7 +134,7 @@ export class Effects {
             kind: 'ring',
             at: e.at,
             radius: e.kind === 'colossus' ? 1.6 : 0.5,
-            colour: enemyColour(e.kind, p),
+            colour: ENEMY_ART[e.kind].colour,
             age: 0,
             life: 0.35,
           });
@@ -315,6 +315,7 @@ export class Effects {
       const ty = (f.at.y - 0.35 - (1 - k) * 0.6) * s;
       ctx.strokeStyle = alpha(p.bgDeep, Math.min(1, k * 1.6) * 0.9);
       ctx.lineWidth = Math.max(2, s * 0.08);
+      ctx.lineJoin = 'round';
       ctx.strokeText(f.text, f.at.x * s, ty);
       ctx.fillStyle = alpha(f.colour, Math.min(1, k * 1.6));
       ctx.fillText(f.text, f.at.x * s, ty);
