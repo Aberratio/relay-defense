@@ -1,7 +1,8 @@
 # Later stages
 
-Notes for what may come after the menu landing (task 14). Nothing here is decided or scheduled.
-Each idea lists what it needs and the open questions, so a later decision starts from facts.
+Notes for what may come after the menu landing (task 14). Nothing here is scheduled, and only
+what is marked as decided is decided. Each idea lists what it needs and the open questions, so a
+later decision starts from facts.
 
 ## 1. Accounts, saved progress and a leaderboard
 
@@ -26,11 +27,13 @@ What it needs:
 - **Personal data (GDPR).** An account on a business site needs a privacy policy, account deletion,
   a retention period and moderation of the names shown on the leaderboard.
 
+Decided (2026-10-23):
+
+- **A guest keeps the local save.** Guest progress stays in localStorage as today, so current
+  players keep their stars; guests are only left off the leaderboard.
+
 Open questions:
 
-- Guest progress: keep today's local save for guests (existing players keep their stars), and
-  only leave guests off the leaderboard? Dropping the local save would take stars away from
-  current players.
 - Should signing in move a guest's local progress to the account?
 - One leaderboard per level, one for the Siege, or both?
 
@@ -46,7 +49,29 @@ The menu became a landing inside the game; the case study page (`/projekty/relay
 left as it is apart from fresh screenshots. Possible next steps: lead with the live board, open the
 embed with the call to action in view, and describe the unlock path and the proofs side by side.
 
-## 4. Smaller ideas for the menu
+## 4. A help dialog that reads well
+
+The help (`?`, "How to play") is one narrow column: every dialog is `min(100%, 36rem)` wide
+(`.dialog` in `src/styles/app.css`), and since the menu landing it holds the introduction, the four
+steps, the star rule, levels and progress with the unlock switch, the keyboard table and the source
+link. On a laptop it scrolls for several screens and is hard to read.
+
+Directions to weigh:
+
+- **Wider help only.** A `.dialog-help` width of about 56-64rem with two columns on wide screens
+  (how to play and stars on the left, progress and keyboard on the right), one column on phones.
+- **Sections instead of one long page.** Tabs or a short side list (How to play, Stars and
+  progress, Keyboard), so each view fits on one screen; the dialog opens on the first.
+- **Show, not tell.** Replace the four steps with small pictures: the sprites and a frame of the
+  board with the route preview, one line each.
+- **Less in the dialog.** The introduction already lives on the landing as the tagline; the
+  keyboard table could open only on demand (a details element or the `?` key).
+
+Constraints that stay: focus kept inside the dialog and returned on close, Escape and a click
+outside close it, in `?embed=1` the height still follows the width only (the dialog opens near the top of
+the frame), phones 360-640 px without horizontal scrolling, every new string in EN and PL.
+
+## 5. Smaller ideas for the menu
 
 - A short reel instead of a single wave on the showcase board: one wave each from a few levels.
 - Show the Siege chapter reached as a small map of the ridge rather than a row of cards.
