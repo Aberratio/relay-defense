@@ -43,13 +43,31 @@ describe('sprites', () => {
       expect(existsSync(`src/assets/sprites/${file}`), file).toBe(true);
   });
 
+  it('ships only 256 px WebP files with alpha, under the weight budget', () => {
+    const dir = 'src/assets/sprites';
+    let total = 0;
+    for (const file of readdirSync(dir)) {
+      expect(file, file).toMatch(/\.webp$/);
+      const bytes = readFileSync(join(dir, file));
+      total += bytes.length;
+      // RIFF container, WEBP form, extended header (VP8X) with the alpha flag set.
+      expect(bytes.toString('ascii', 0, 4) + bytes.toString('ascii', 8, 16), file).toBe(
+        'RIFFWEBPVP8X',
+      );
+      expect((bytes[20] ?? 0) & 0x10, `${file} alpha`).toBe(0x10);
+      expect([1 + bytes.readUIntLE(24, 3), 1 + bytes.readUIntLE(27, 3)], file).toEqual([256, 256]);
+    }
+    // The 28 PNGs weighed 1.46 MB; the menu loads every sprite, so keep the set small.
+    expect(total).toBeLessThan(400_000);
+  });
+
   it('gives every agent a sprite per level and every fault and scenery piece one sprite', () => {
     for (const kind of TOWER_KINDS) {
       const art = TOWER_ART[kind];
       expect(byName.has(art.sprite), kind).toBe(true);
       expect(byName.get(art.sprite)?.tiers ?? 1, kind).toBe(art.tiers);
       for (let level = 0; level < art.tiers; level++)
-        expect(existsSync(`src/assets/sprites/${towerSprite(kind, level)}.png`)).toBe(true);
+        expect(existsSync(`src/assets/sprites/${towerSprite(kind, level)}.webp`)).toBe(true);
     }
     const single = [...ENEMY_KINDS.map((k) => ENEMY_ART[k].sprite), ...Object.values(SCENERY_ART)];
     for (const name of single) {
@@ -76,7 +94,7 @@ describe('sprites', () => {
   it('lists a rendered file for every sprite a level can show', () => {
     for (const level of LEVELS)
       for (const name of levelSprites(level))
-        expect(existsSync(`src/assets/sprites/${name}.png`), `${level.id} ${name}`).toBe(true);
+        expect(existsSync(`src/assets/sprites/${name}.webp`), `${level.id} ${name}`).toBe(true);
   });
 
   it('credits every source model and uses only models in the repository', () => {
