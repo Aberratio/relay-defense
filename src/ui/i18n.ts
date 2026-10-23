@@ -276,6 +276,71 @@ const en = {
       focus: 'Ogre Warlord: heavy armour, huge life, resists slows, shields his neighbours.',
     },
   } satisfies Record<string, LevelCopy>,
+  siege: {
+    title: 'Siege',
+    tagline:
+      'One meadow, five chapters. Your defenders stay where you put them, and every chapter brings a new hardship.',
+    hint: 'Best played after the ten levels.',
+    begin: 'Begin the siege',
+    resume: (n: number) => `Continue with chapter ${n}`,
+    again: 'Start the siege over',
+    won: 'Siege broken',
+    chapter: (n: number, total: number) => `Siege · chapter ${n} / ${total}`,
+    short: (n: number) => `Siege ${n}`,
+    chapterLabel: (n: number, stars: number) => `Chapter ${n}: ${stars} of 3 stars`,
+    chapterOpen: (n: number) => `Chapter ${n}: not won yet`,
+    now: 'What changes now',
+    next: 'In the next chapter',
+    review:
+      'Before the first wave every defender you brought sells back at full value, so you can rework the whole defence.',
+    topUp: (n: number) =>
+      `The Heart Tree adds ${n} gold, so your defence is worth at least what this chapter asks.`,
+    rules:
+      'Defenders and gold carry over to the next chapter. A defeat sends you back to the start of the chapter.',
+    nextChapter: 'Next chapter',
+    retry: 'Retry the chapter',
+    allDone: 'The siege is broken and the Heart Tree stands. Thank you for playing.',
+    fog: (pct: number) => `In fog: ${pct}% of the range`,
+    tiles: {
+      fog: 'in fog',
+      fogLater: 'fog comes here later',
+      cracked: 'cracked, it will collapse',
+      dormant: 'sleeping portal',
+    },
+    ahead: 'What the siege brings',
+    chapters: {
+      awakening: {
+        name: 'Awakening',
+        brief:
+          'A ridge splits the meadow and one narrow pass leads through it. A second portal sleeps on the southern edge.',
+        focus:
+          'Build for the whole siege: the sleeping portal and the cracked pass already count, so the monsters must keep a way from both.',
+      },
+      'second-portal': {
+        name: 'Second Portal',
+        brief:
+          'The southern portal wakes. Monsters now come from two sides, and the southern ones start close to the tree.',
+        focus: 'A second portal opens on the southern edge.',
+      },
+      landslide: {
+        name: 'Landslide',
+        brief:
+          'The pass through the ridge has collapsed. Monsters from the west now go round through the gap in the south.',
+        focus: 'The pass through the ridge collapses and the routes change.',
+      },
+      fog: {
+        name: 'Fog',
+        brief: 'Fog rolls over the south-east of the meadow, where the two routes meet.',
+        focus: 'Fog covers the south-east and shortens the reach of every defender standing in it.',
+      },
+      warlord: {
+        name: 'The Warlord',
+        brief:
+          'The Ogre Warlord leads the last assault, and his monsters have hardened their hides.',
+        focus: 'The Ogre Warlord comes, and every monster gains 2 armour.',
+      },
+    } satisfies Record<string, LevelCopy>,
+  },
 };
 
 export type Strings = typeof en;
@@ -527,6 +592,71 @@ const pl: Strings = {
       brief: 'Nadchodzi coś dużego, co osłania swoją eskortę. Wszystko, co już wiesz, naraz.',
       focus:
         'Wódz ogrów: ciężki pancerz, ogromny zapas życia, odporny na spowolnienia, osłania sąsiadów.',
+    },
+  },
+  siege: {
+    title: 'Oblężenie',
+    tagline:
+      'Jedna łąka, pięć rozdziałów. Obrońcy zostają tam, gdzie ich postawisz, a każdy rozdział przynosi nowe utrudnienie.',
+    hint: 'Najlepiej grać po dziesięciu poziomach.',
+    begin: 'Rozpocznij oblężenie',
+    resume: (n) => `Graj dalej: rozdział ${n}`,
+    again: 'Zacznij oblężenie od nowa',
+    won: 'Oblężenie odparte',
+    chapter: (n, total) => `Oblężenie · rozdział ${n} / ${total}`,
+    short: (n) => `Oblężenie ${n}`,
+    chapterLabel: (n, stars) => `Rozdział ${n}: ${stars} z 3 gwiazdek`,
+    chapterOpen: (n) => `Rozdział ${n}: jeszcze niewygrany`,
+    now: 'Co się zmienia teraz',
+    next: 'W następnym rozdziale',
+    review:
+      'Przed pierwszą falą każdy przeniesiony obrońca sprzedaje się za pełną wartość, więc możesz przebudować całą obronę.',
+    topUp: (n) =>
+      `Drzewo Serca dokłada ${n} złota, żeby Twoja obrona była warta co najmniej tyle, ile wymaga ten rozdział.`,
+    rules:
+      'Obrońcy i złoto przechodzą do następnego rozdziału. Porażka cofa Cię na początek rozdziału.',
+    nextChapter: 'Następny rozdział',
+    retry: 'Powtórz rozdział',
+    allDone: 'Oblężenie odparte, Drzewo Serca ocalało. Dziękuję za grę.',
+    fog: (pct) => `We mgle: ${pct}% zasięgu`,
+    tiles: {
+      fog: 'we mgle',
+      fogLater: 'tu później nadejdzie mgła',
+      cracked: 'popękana, zawali się',
+      dormant: 'uśpiony portal',
+    },
+    ahead: 'Co przyniesie oblężenie',
+    chapters: {
+      awakening: {
+        name: 'Przebudzenie',
+        brief:
+          'Grań dzieli łąkę, a przez nią prowadzi jedna wąska przełęcz. Na południowym skraju śpi drugi portal.',
+        focus:
+          'Buduj z myślą o całym oblężeniu: uśpiony portal i popękana przełęcz już się liczą, więc potwory muszą mieć drogę od obu.',
+      },
+      'second-portal': {
+        name: 'Drugi portal',
+        brief:
+          'Budzi się południowy portal. Potwory nadchodzą z dwóch stron, a te z południa startują blisko Drzewa.',
+        focus: 'Na południowym skraju otwiera się drugi portal.',
+      },
+      landslide: {
+        name: 'Osuwisko',
+        brief:
+          'Przełęcz w grani się zawaliła. Potwory z zachodu obchodzą ją teraz przez przerwę na południu.',
+        focus: 'Przełęcz w grani się zawala i trasy się zmieniają.',
+      },
+      fog: {
+        name: 'Mgła',
+        brief:
+          'Mgła spływa na południowo-wschodnią część łąki, tam, gdzie spotykają się obie trasy.',
+        focus: 'Mgła okrywa południowy wschód i skraca zasięg każdego obrońcy, który w niej stoi.',
+      },
+      warlord: {
+        name: 'Wódz',
+        brief: 'Wódz ogrów prowadzi ostatni szturm, a jego potwory mają stwardniałe skóry.',
+        focus: 'Nadchodzi Wódz ogrów, a każdy potwór zyskuje 2 punkty pancerza.',
+      },
     },
   },
 };

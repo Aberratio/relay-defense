@@ -38,6 +38,15 @@ try {
   const wave = await page.locator('#stat-wave .stat-value').textContent();
   if (!wave?.startsWith('2')) fail(`expected wave 2 after clearing the first, got ${wave}`);
 
+  // Siege: the card under the levels opens the first chapter.
+  await page.goto(`${base}?lang=en`);
+  await page.locator('#siege .btn-primary').click();
+  const eyebrow = await page.locator('.dialog .dialog-eyebrow').textContent();
+  if (!eyebrow?.startsWith('Siege')) fail(`expected the Siege briefing, got ${eyebrow}`);
+  await page.locator('.dialog .btn-primary').click();
+  const title = await page.locator('#level-name').textContent();
+  if (!title?.startsWith('Siege 1')) fail(`expected Siege chapter 1, got ${title}`);
+
   // Embed: a parent page frames the game and receives its height.
   const parent = await browser.newPage({ viewport: { width: 1000, height: 800 } });
   parent.on('pageerror', (e) => errors.push(e.message));
@@ -61,7 +70,7 @@ try {
     `${base}?embed=1&lang=pl`,
   );
   if (!(height > 300)) fail(`implausible embed height ${height}`);
-  console.info(`Smoke test passed: level played, embed height ${height}px.`);
+  console.info(`Smoke test passed: level played, Siege opened, embed height ${height}px.`);
 } finally {
   await browser.close();
   server.httpServer.close();

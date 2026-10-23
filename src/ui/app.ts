@@ -2,23 +2,33 @@
 // simulation, rendering every animation frame) and all input: mouse, touch and keyboard.
 import { Game, type GameEvent } from '../engine/game';
 import { tileAt } from '../engine/grid';
-import { DT, ENEMIES, TOWERS } from '../engine/stats';
+import { DT, ENEMIES, FOG_RANGE, TOWERS, type TowerLevel } from '../engine/stats';
 import {
   ENEMY_KINDS,
   TARGET_MODES,
   type Cell,
   type EnemyKind,
+  type Carry,
   type LevelDef,
   type PlaceError,
   type TowerKind,
 } from '../engine/types';
 import { LEVELS } from '../levels/levels';
+import { EMPTY_CARRY, SIEGE, SIEGE_CHAPTERS } from '../levels/siege';
 import { BoardRenderer, type BoardView } from '../render/board';
 import { readPalette, type Palette } from '../render/palette';
 import { ENEMY_ART, towerSprite } from '../render/art';
 import { paintIcon } from '../render/sprite-cache';
 import { strings, type Lang, type Strings } from './i18n';
-import { loadProgress, recordResult, starsFor, type Progress } from './progress';
+import {
+  loadProgress,
+  loadSiege,
+  recordResult,
+  saveSiege,
+  starsFor,
+  type Progress,
+  type SiegeSave,
+} from './progress';
 
 export interface AppOptions {
   lang: Lang;
@@ -26,6 +36,8 @@ export interface AppOptions {
   reducedMotion: boolean;
   /** Level to open straight away (`?level=`), skipping the menu. */
   startLevel?: string;
+  /** Open the Siege straight away (`?mode=siege`), skipping the menu. */
+  startSiege?: boolean;
 }
 
 type Info =
@@ -78,6 +90,20 @@ export function newKinds(index: number): { towers: TowerKind[]; enemies: EnemyKi
   };
 }
 
+/** The carry without the defenders that do not fit the chapter's board. */
+function fitting(level: LevelDef, carry: Carry): Carry {
+  const towers: Carry['towers'] = [];
+  for (const t of carry.towers) {
+    try {
+      Game.resume(level, { credits: 0, towers: [...towers, t] });
+      towers.push(t);
+    } catch {
+      // Left out: it does not fit this board.
+    }
+  }
+  return { credits: carry.credits, towers };
+}
+
 export class App {
   private lang: Lang;
   private t: Strings;
@@ -87,6 +113,15 @@ export class App {
   private progress: Progress;
   private game: Game | null = null;
   private levelIndex = 0;
+  private siege: SiegeSave;
+  /** The Siege chapter being played, or null in the ten levels. */
+  private chapter: number | null = null;
+  /** Gold the Heart Tree added to reach the chapter's floor. */
+  private topUp = 0;
+  /** What this chapter started from, so Restart rebuilds it even after the checkpoint moved. */
+  private chapterStart: Carry = EMPTY_CARRY;
+  /** Defenders brought into this chapter: selling one is a sale, not an undo. */
+  private carried = new Set<number>();
   private selectedKind: TowerKind | null = null;
   private selectedTower: number | null = null;
   private info: Info = null;
@@ -119,6 +154,7 @@ export class App {
     this.canvas = $('board') as HTMLCanvasElement;
     this.renderer = new BoardRenderer(this.canvas, this.palette, opts.reducedMotion);
     this.progress = loadProgress();
+    this.siege = loadSiege(SIEGE.version, SIEGE_CHAPTERS.length);
   }
 
   start(): void {
@@ -128,6 +164,7 @@ export class App {
       ? LEVELS.findIndex((l) => l.id === this.opts.startLevel)
       : -1;
     if (start >= 0) this.openLevel(start);
+    else if (this.opts.startSiege) this.openChapter(this.siege.checkpoint?.chapter ?? 0);
     else this.showMenu();
     requestAnimationFrame((ts) => this.frame(ts));
   }
@@ -137,7 +174,7 @@ export class App {
   private bindStatic(): void {
     $('home').addEventListener('click', () => this.showMenu());
     $('help-open').addEventListener('click', () => this.openHelp());
-    $('restart').addEventListener('click', () => this.openLevel(this.levelIndex, false));
+    $('restart').addEventListener('click', () => this.restart());
     $('pause').addEventListener('click', () => this.togglePause());
     $('speed').addEventListener('click', () => this.cycleSpeed());
     $('start-wave').addEventListener('click', () => this.startWave());
@@ -210,8 +247,9 @@ export class App {
     }
     this.canvas.setAttribute('aria-label', this.t.boardLabel);
     this.renderLevels();
+    this.renderSiege();
     if (this.game) {
-      $('level-name').textContent = this.levelTitle(this.levelIndex);
+      $('level-name').textContent = this.title();
       this.renderPalette();
       this.renderInfo();
       this.renderWaves();
@@ -229,8 +267,19 @@ export class App {
       : '';
   }
 
+  /** The heading of what is being played: a level or a Siege chapter. */
+  private title(): string {
+    if (this.chapter === null) return this.levelTitle(this.levelIndex);
+    return `${this.t.siege.short(this.chapter + 1)}. ${this.chapterCopy(this.chapter).name}`;
+  }
+
   private copyOf(level: LevelDef) {
     return this.t.levelCopy[level.id as keyof Strings['levelCopy']];
+  }
+
+  private chapterCopy(index: number) {
+    const key = SIEGE.chapters[index]?.key ?? 'awakening';
+    return this.t.siege.chapters[key];
   }
 
   // ---- Screens ---------------------------------------------------------------------------
@@ -239,12 +288,73 @@ export class App {
     this.closeDialog();
     window.clearTimeout(this.resultTimer);
     this.game = null;
+    this.chapter = null;
     $('menu').hidden = false;
     $('game').hidden = true;
     $('stats').hidden = true;
     $('controls').hidden = true;
     $('level-name').textContent = '';
     this.renderLevels();
+    this.renderSiege();
+  }
+
+  /** The Siege card under the levels: chapters with their stars, and how to go on. */
+  private renderSiege(): void {
+    const t = this.t.siege;
+    const total = SIEGE_CHAPTERS.length;
+    const cp = this.siege.checkpoint;
+    const done = this.siege.stars.length >= total && this.siege.stars.every((s) => s > 0);
+    const chapters = h(
+      'ol',
+      { class: 'siege-chapters' },
+      SIEGE_CHAPTERS.map((_, i) => {
+        const stars = this.siege.stars[i] ?? 0;
+        const label = stars > 0 ? t.chapterLabel(i + 1, stars) : t.chapterOpen(i + 1);
+        const current = cp?.chapter === i;
+        const attrs: Record<string, string> = current ? { 'aria-current': 'step' } : {};
+        const cls = current ? 'siege-chapter is-current' : 'siege-chapter';
+        return h('li', { class: cls, attrs }, [
+          h('span', { class: 'level-num', text: String(i + 1).padStart(2, '0') }),
+          h('span', { class: 'siege-chapter-name', text: this.chapterCopy(i).name }),
+          this.starsEl(stars, label),
+        ]);
+      }),
+    );
+    const actions: HTMLElement[] = [];
+    const button = (text: string, cls: string, run: () => void) => {
+      const b = h('button', { class: `btn ${cls}`, text, attrs: { type: 'button' } });
+      b.addEventListener('click', run);
+      actions.push(b);
+    };
+    if (cp && cp.chapter > 0) {
+      button(t.resume(cp.chapter + 1), 'btn-primary', () => this.openChapter(cp.chapter));
+      button(t.again, 'btn-ghost', () => this.beginSiege());
+    } else {
+      button(done ? t.again : t.begin, 'btn-primary', () => this.beginSiege());
+    }
+    $('siege').replaceChildren(
+      h('div', { class: 'siege-head' }, [
+        h('h2', { text: t.title, attrs: { id: 'siege-title' } }),
+        ...(done ? [h('span', { class: 'siege-badge', text: t.won })] : []),
+      ]),
+      h('p', { class: 'siege-tagline', text: t.tagline }),
+      h('p', { class: 'stars-rule', text: `${t.rules} ${t.hint}` }),
+      chapters,
+      h('div', { class: 'siege-actions' }, actions),
+    );
+  }
+
+  /**
+   * Starts the campaign from its first chapter; the stars won so far stay. The old checkpoint is
+   * kept until the first wave starts, so a stray click on "start over" costs nothing.
+   */
+  private beginSiege(): void {
+    this.openChapter(0, true, EMPTY_CARRY);
+  }
+
+  private restart(): void {
+    if (this.chapter !== null) this.openChapter(this.chapter, false, this.chapterStart);
+    else this.openLevel(this.levelIndex, false);
   }
 
   private renderLevels(): void {
@@ -286,10 +396,36 @@ export class App {
   private openLevel(index: number, brief = true): void {
     const level = LEVELS[index];
     if (!level) return;
+    this.levelIndex = index;
+    this.chapter = null;
+    this.carried.clear();
+    this.topUp = 0;
+    this.enter(new Game(level), brief);
+  }
+
+  /**
+   * Opens a Siege chapter, by default from the checkpoint: the gold and defenders the chapter
+   * before left. Defenders that no longer fit the map (a damaged save; it should not happen) are
+   * left out, and the floor keeps the chapter winnable without them.
+   */
+  private openChapter(index: number, brief = true, from?: Carry): void {
+    const level = SIEGE_CHAPTERS[index];
+    if (!level) return;
+    const cp = this.siege.checkpoint;
+    const wanted = from ?? (cp?.chapter === index ? cp.carry : EMPTY_CARRY);
+    const carry = fitting(level, wanted);
+    const game = Game.resume(level, carry);
+    this.chapter = index;
+    this.chapterStart = carry;
+    this.carried = new Set(game.towers.map((t) => t.id));
+    this.topUp = index > 0 ? Math.max(0, game.credits - Math.floor(carry.credits)) : 0;
+    this.enter(game, brief);
+  }
+
+  private enter(game: Game, brief: boolean): void {
     window.clearTimeout(this.resultTimer);
     this.closeDialog();
-    this.levelIndex = index;
-    this.game = new Game(level);
+    this.game = game;
     this.renderer.setGame(this.game);
     this.selectedKind = null;
     this.selectedTower = null;
@@ -308,7 +444,7 @@ export class App {
     $('game').hidden = false;
     $('stats').hidden = false;
     $('controls').hidden = false;
-    $('level-name').textContent = this.levelTitle(index);
+    $('level-name').textContent = this.title();
     this.renderer.resize();
     this.renderPalette();
     this.renderInfo();
@@ -359,7 +495,64 @@ export class App {
     }
   }
 
+  private openChapterBrief(index: number): void {
+    const t = this.t.siege;
+    const copy = this.chapterCopy(index);
+    const next = index + 1 < SIEGE_CHAPTERS.length ? this.chapterCopy(index + 1) : null;
+    const go = h('button', {
+      class: 'btn btn-primary',
+      text: this.t.begin,
+      attrs: { type: 'button' },
+    });
+    go.addEventListener('click', () => this.closeDialog());
+    const notes: string[] = [];
+    if (this.carried.size > 0) notes.push(t.review);
+    if (this.topUp > 0) notes.push(t.topUp(this.topUp));
+    this.showDialog(
+      'brief',
+      [
+        h('p', { class: 'dialog-eyebrow', text: t.chapter(index + 1, SIEGE_CHAPTERS.length) }),
+        h('h2', { text: copy.name, attrs: { id: 'dialog-title' } }),
+        h('p', { class: 'dialog-lead', text: copy.brief }),
+        h('div', { class: 'dialog-focus' }, [
+          h('strong', { text: index === 0 ? t.title : t.now }),
+          h('p', { text: copy.focus }),
+          ...(index === 0 ? [h('p', { text: t.rules })] : []),
+        ]),
+        ...notes.map((text) => h('p', { class: 'dialog-note', text })),
+        ...(index === 0
+          ? [
+              h('h3', { text: t.ahead }),
+              h(
+                'ul',
+                { class: 'siege-ahead' },
+                SIEGE_CHAPTERS.slice(1).map((_, i) =>
+                  h('li', {}, [
+                    h('strong', { text: `${this.chapterCopy(i + 1).name}: ` }),
+                    this.chapterCopy(i + 1).focus,
+                  ]),
+                ),
+              ),
+            ]
+          : next
+            ? [
+                h('p', { class: 'dialog-note siege-next' }, [
+                  h('strong', { text: `${t.next}: ` }),
+                  next.focus,
+                ]),
+              ]
+            : []),
+        h('div', { class: 'dialog-actions' }, [go]),
+      ],
+      go,
+    );
+  }
+
   private openBrief(): void {
+    if (this.chapter !== null) {
+      this.openChapterBrief(this.chapter);
+      return;
+    }
     const level = LEVELS[this.levelIndex];
     if (!level) return;
     const copy = this.copyOf(level);
@@ -453,26 +646,49 @@ export class App {
       return b;
     };
     let primary: HTMLElement;
-    if (won && next)
+    const chapter = this.chapter;
+    if (chapter !== null) {
+      const more = chapter + 1 < SIEGE_CHAPTERS.length;
+      if (won && more)
+        primary = button(this.t.siege.nextChapter, 'btn-primary', () =>
+          this.openChapter(chapter + 1),
+        );
+      else if (won) primary = button(this.t.backToLevels, 'btn-primary', () => this.showMenu());
+      else
+        primary = button(this.t.siege.retry, 'btn-primary', () =>
+          this.openChapter(chapter, false, this.chapterStart),
+        );
+      if (!won || more) button(this.t.backToLevels, 'btn-ghost', () => this.showMenu());
+    } else if (won && next)
       primary = button(this.t.nextLevel, 'btn-primary', () => this.openLevel(this.levelIndex + 1));
     else
       primary = button(won ? this.t.replay : this.t.tryAgain, 'btn-primary', () =>
         this.openLevel(this.levelIndex, false),
       );
-    if (won && next)
-      button(this.t.replay, 'btn-ghost', () => this.openLevel(this.levelIndex, false));
-    button(this.t.backToLevels, 'btn-ghost', () => this.showMenu());
+    if (chapter === null) {
+      if (won && next)
+        button(this.t.replay, 'btn-ghost', () => this.openLevel(this.levelIndex, false));
+      button(this.t.backToLevels, 'btn-ghost', () => this.showMenu());
+    }
+    const last = chapter !== null ? chapter + 1 >= SIEGE_CHAPTERS.length : !next;
     const text = won
       ? this.t.victoryText(game.lives, game.maxLives)
       : this.t.defeatText(game.wave + 1, game.waveCount);
     this.showDialog(
       'result',
       [
-        h('p', { class: 'dialog-eyebrow', text: this.levelTitle(this.levelIndex) }),
+        h('p', { class: 'dialog-eyebrow', text: this.title() }),
         h('h2', { text: won ? this.t.victory : this.t.defeat, attrs: { id: 'dialog-title' } }),
         ...(won ? [this.starsEl(stars, this.t.starsLabel(stars))] : []),
         h('p', { class: 'dialog-lead', text }),
-        ...(won && !next ? [h('p', { class: 'dialog-note', text: this.t.allDone })] : []),
+        ...(won && last
+          ? [
+              h('p', {
+                class: 'dialog-note',
+                text: chapter !== null ? this.t.siege.allDone : this.t.allDone,
+              }),
+            ]
+          : []),
         ...(!won ? [h('p', { class: 'dialog-note', text: this.t.defeatHint })] : []),
         h('div', { class: 'dialog-actions' }, actions),
       ],
@@ -563,10 +779,12 @@ export class App {
     this.renderInfo();
   }
 
-  private statRows(kind: TowerKind, level: number, next?: number): HTMLElement {
+  private statRows(kind: TowerKind, level: number, next?: number, fog = false): HTMLElement {
     const spec = TOWERS[kind];
-    const l = spec.levels[level] ?? spec.levels[0];
-    const n = next !== undefined ? spec.levels[next] : undefined;
+    const reach = (x: TowerLevel | undefined) =>
+      x && fog ? { ...x, range: x.range * FOG_RANGE } : x;
+    const l = reach(spec.levels[level]) ?? spec.levels[0];
+    const n = next !== undefined ? reach(spec.levels[next]) : undefined;
     const rows: [string, string, string?][] = [];
     const pair = (label: string, a: number, b: number | undefined, f: (v: number) => string) =>
       rows.push([label, f(a), b !== undefined && b !== a ? f(b) : undefined]);
@@ -652,7 +870,7 @@ export class App {
             [
               [this.t.hp, `${hp}+`],
               [this.t.speedStat, fmt(spec.speed, 2)],
-              [this.t.armour, String(spec.armour)],
+              [this.t.armour, String(game.armourOf(kind))],
               [this.t.leak, String(spec.leak)],
               [this.t.bounty, String(spec.bounty)],
             ] as const
@@ -670,6 +888,7 @@ export class App {
     }
     const spec = TOWERS[tower.kind];
     const cost = game.upgradeCost(tower);
+    const fog = game.foggy(tower.x, tower.y);
     const upgrade = h('button', {
       class: 'btn btn-primary',
       attrs: { type: 'button', 'data-role': 'upgrade' },
@@ -691,7 +910,10 @@ export class App {
           }),
         ]),
       ]),
-      this.statRows(tower.kind, tower.level, cost !== null ? tower.level + 1 : undefined),
+      this.statRows(tower.kind, tower.level, cost !== null ? tower.level + 1 : undefined, fog),
+      ...(fog && tower.kind !== 'wall'
+        ? [h('p', { class: 'info-meta', text: this.t.siege.fog(Math.round(FOG_RANGE * 100)) })]
+        : []),
     ];
     if (!spec.passive) {
       const modes = h('div', {
@@ -743,7 +965,8 @@ export class App {
     const sell = panel.querySelector<HTMLButtonElement>('[data-role="sell"]');
     if (sell) {
       const value = game.sellValue(tower);
-      sell.textContent = `${tower.lockedCredits === 0 ? this.t.undo : this.t.sell} · +${value}`;
+      const undo = tower.lockedCredits === 0 && !this.carried.has(tower.id);
+      sell.textContent = `${undo ? this.t.undo : this.t.sell} · +${value}`;
       const blocked = game.canSell(tower);
       sell.disabled = blocked !== null;
       sell.title = blocked === 'wave' ? this.t.placeErrors.wave : '';
@@ -768,8 +991,9 @@ export class App {
     const spec = ENEMIES[kind];
     const tr = this.t.traits;
     const list: string[] = [];
+    const armour = this.game?.armourOf(kind) ?? spec.armour;
     if (kind === 'colossus') list.push(tr.boss);
-    if (spec.armour) list.push(tr.armour(spec.armour));
+    if (armour) list.push(tr.armour(armour));
     if (spec.cloaked) list.push(tr.cloaked);
     if (spec.splitInto) list.push(tr.splits);
     if (spec.heal) list.push(tr.heals);
@@ -907,6 +1131,12 @@ export class App {
   private startWave(): void {
     const game = this.game;
     if (!game || game.phase !== 'build' || this.dialogKind) return;
+    const cp = this.siege.checkpoint;
+    if (this.chapter === 0 && game.wave === 0 && cp && cp.chapter !== 0) {
+      // "Start over" takes effect here: the old checkpoint is given up for the new run.
+      this.siege = { ...this.siege, checkpoint: null };
+      saveSiege(this.siege);
+    }
     game.startWave();
     this.paused = false;
     this.renderControls();
@@ -1038,7 +1268,22 @@ export class App {
   }
 
   private finish(game: Game): void {
-    if (game.phase === 'won')
+    const chapter = this.chapter;
+    if (chapter !== null) {
+      if (game.phase === 'won') {
+        const stars = [...this.siege.stars];
+        while (stars.length <= chapter) stars.push(0);
+        stars[chapter] = Math.max(stars[chapter] ?? 0, starsFor(game.lives, game.maxLives));
+        const more = chapter + 1 < SIEGE_CHAPTERS.length;
+        this.siege = {
+          stars,
+          checkpoint: more
+            ? { version: SIEGE.version, chapter: chapter + 1, carry: game.carry() }
+            : null,
+        };
+        saveSiege(this.siege);
+      }
+    } else if (game.phase === 'won')
       this.progress = recordResult(
         this.progress,
         game.level.id,
@@ -1112,7 +1357,15 @@ export class App {
       const what = tower
         ? this.t.towers[tower.kind].name
         : (this.t.tiles[tileAt(game.grid, next.x, next.y)] ?? '');
-      this.announce(this.t.announce.cursor(next.x, next.y, what));
+      const notes = this.t.siege.tiles;
+      const spawn = game.grid.spawns.findIndex((s) => s.x === next.x && s.y === next.y);
+      const extra = [
+        spawn >= 0 && game.dormant(spawn) ? notes.dormant : '',
+        game.isCracked(next.x, next.y) ? notes.cracked : '',
+        game.foggy(next.x, next.y) ? notes.fog : '',
+        game.fogComing(next.x, next.y) ? notes.fogLater : '',
+      ].filter(Boolean);
+      this.announce(this.t.announce.cursor(next.x, next.y, [what, ...extra].join(', ')));
       return;
     }
     if (e.key === 'Enter') {

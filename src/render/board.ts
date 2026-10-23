@@ -4,14 +4,14 @@
 // simulation ticks at 30 Hz and the board interpolates positions between ticks, so motion stays
 // smooth at any refresh rate.
 import { centre, type Game, type GameEvent } from '../engine/game';
-import { DT, ENEMIES, TOWERS } from '../engine/stats';
+import { DT, ENEMIES, FOG_RANGE, TOWERS } from '../engine/stats';
 import type { Cell, TowerKind } from '../engine/types';
 import { ENEMY_ART, SCENERY_ART, TOWER_ART, enemyRing, levelSprites, towerSprite } from './art';
 import { Effects } from './effects';
 import { alpha, type Palette } from './palette';
 import { FRAME, GROUND, SQUASH, SpriteCache, TILT, preloadSprites } from './sprite-cache';
 import { drawEnemy, drawTower, glow, roundRect } from './sprites';
-import { paintTerrain } from './terrain';
+import { paintHazards, paintTerrain } from './terrain';
 
 export interface BoardView {
   /** Cell under the pointer or the keyboard cursor. */
@@ -36,7 +36,8 @@ interface Actor {
   /** Ground line in cells: the sort key. */
   y: number;
   x: number;
-  kind: 'gate' | 'core' | 'tower' | 'fault';
+  /** `sleeper`: a portal that sends nothing yet (Siege). */
+  kind: 'gate' | 'sleeper' | 'core' | 'tower' | 'fault';
   tower: Tower | null;
   enemy: Enemy | null;
 }
@@ -191,7 +192,16 @@ export class BoardRenderer {
     layer.width = this.canvas.width;
     layer.height = this.canvas.height;
     const ctx = layer.getContext('2d');
-    if (ctx) paintTerrain(ctx, game.grid, this.cell);
+    if (ctx) {
+      paintTerrain(ctx, game.grid, this.cell);
+      const hazards = game.level.hazards;
+      if (hazards?.cracked || hazards?.fog || hazards?.fogLater)
+        paintHazards(ctx, this.cell, {
+          cracked: hazards.cracked ?? [],
+          fog: hazards.fog ?? [],
+          fogLater: hazards.fogLater ?? [],
+        });
+    }
     return layer;
   }
 
@@ -253,16 +263,22 @@ export class BoardRenderer {
       }
       ctx.restore();
     };
+    // A sleeping portal's route is drawn faintly: it already shapes the maze (Siege).
+    const awake = (_: Cell[], i: number) => !game.dormant(i);
+    const asleep = (_: Cell[], i: number) => game.dormant(i);
     const preview = view.ghost?.routes;
     if (preview && view.ghost?.valid) {
       paths(game.routes(), alpha(p.text, 0.25), Math.max(1.5, s * 0.06));
-      paths(preview, alpha(p.signal, 0.9), Math.max(2, s * 0.09));
+      paths(preview.filter(awake), alpha(p.signal, 0.9), Math.max(2, s * 0.09));
+      paths(preview.filter(asleep), alpha(p.signal, 0.4), Math.max(1.5, s * 0.06));
     } else {
+      const routes = game.routes();
       paths(
-        game.routes(),
+        routes.filter(awake),
         alpha(p.text, game.phase === 'build' ? 0.6 : 0.3),
         Math.max(1.5, s * 0.07),
       );
+      paths(routes.filter(asleep), alpha(p.text, 0.2), Math.max(1.5, s * 0.05));
     }
   }
 
@@ -368,7 +384,9 @@ export class BoardRenderer {
   private drawActors(game: Game, lerp: number, time: number, view: BoardView): void {
     this.actorCount = 0;
     this.barCount = 0;
-    for (const sp of game.grid.spawns) this.addActor(sp.y + 0.5, sp.x + 0.5, 'gate', null, null);
+    game.grid.spawns.forEach((sp, i) =>
+      this.addActor(sp.y + 0.5, sp.x + 0.5, game.dormant(i) ? 'sleeper' : 'gate', null, null),
+    );
     const core = game.grid.core;
     this.addActor(core.y + 0.5, core.x + 0.5, 'core', null, null);
     for (const t of game.towers) this.addActor(t.y + 0.5, t.x + 0.5, 'tower', t, null);
@@ -381,6 +399,7 @@ export class BoardRenderer {
     const live = this.actors.slice(0, this.actorCount).sort((a, b) => a.y - b.y);
     for (const a of live) {
       if (a.kind === 'gate') this.drawGate(a.x, a.y, time);
+      else if (a.kind === 'sleeper') this.drawSleeper(a.x, a.y);
       else if (a.kind === 'core') this.drawCore(game, a.x, a.y, time);
       else if (a.kind === 'tower' && a.tower) this.drawTower(a.tower, a.x, a.y, time, view);
       else if (a.kind === 'fault' && a.enemy) this.drawFault(a.enemy, a.x, a.y, time);
@@ -403,6 +422,22 @@ export class BoardRenderer {
       ctx.arc(cx * s, cy * s, s * 0.32, 0, Math.PI * 2);
       ctx.stroke();
     }
+  }
+
+  /** A sleeping portal: the arch without its glow, dimmed. */
+  private drawSleeper(cx: number, cy: number): void {
+    const s = this.cell;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    if (!this.blit(SCENERY_ART.gate, s / 0.95, cx * s, cy * s)) {
+      ctx.strokeStyle = alpha(this.palette.text, 0.6);
+      ctx.lineWidth = Math.max(1.2, s * 0.045);
+      ctx.beginPath();
+      ctx.arc(cx * s, cy * s, s * 0.32, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private drawCore(game: Game, cx: number, cy: number, time: number): void {
@@ -622,7 +657,7 @@ export class BoardRenderer {
       if (ghost.kind !== 'wall')
         this.rangeRing(
           centre(cell),
-          TOWERS[ghost.kind].levels[0].range,
+          TOWERS[ghost.kind].levels[0].range * (this.game?.foggy(cell.x, cell.y) ? FOG_RANGE : 1),
           TOWERS[ghost.kind].minRange,
           colour,
         );
