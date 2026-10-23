@@ -300,8 +300,8 @@ def main():
         if spec.get('outline', True):
             common.outline(objs, (0.04, 0.05, 0.03, 1), 0.015)
     elif spec['side'] == 'evil':
-        ring = common.material('menace', (0.9, 0.08, 0.15), emit=0.5)
-        common.add('torus', 'menace', ring, major_radius=0.32 * spec['size'] / 0.95, minor_radius=0.01,
+        ring = common.material('menace', (0.85, 0.08, 0.15), emit=0.3)
+        common.add('torus', 'menace', ring, major_radius=0.32 * spec['size'] / 0.95, minor_radius=0.006,
                    location=(0, 0, 0.004))
         common.outline(objs, (0.12, 0.0, 0.03, 1), 0.012)
     elif spec.get('outline', True):

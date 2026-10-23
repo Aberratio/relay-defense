@@ -1,13 +1,17 @@
-// Draws a game on a 2D canvas: a cached background layer (tiles, lanes, sockets, rock), then each
-// frame the routes, fields, towers, enemies, shots and effects. The simulation ticks at 30 Hz and
-// the board interpolates positions between ticks, so motion stays smooth at any refresh rate.
+// Draws a game on a 2D canvas: a cached background layer (meadow, paths, stone circles, rock),
+// then each frame the routes, fields, characters, shots and effects. Characters are pre-rendered
+// sprites (art/README.md), drawn back to front so nearer ones overlap farther ones. The
+// simulation ticks at 30 Hz and the board interpolates positions between ticks, so motion stays
+// smooth at any refresh rate.
 import { centre, type Game, type GameEvent } from '../engine/game';
-import { tileAt } from '../engine/grid';
 import { DT, ENEMIES, TOWERS } from '../engine/stats';
 import type { Cell, TowerKind } from '../engine/types';
+import { ENEMY_ART, SCENERY_ART, TOWER_ART, enemyRing, towerSprite } from './art';
 import { Effects } from './effects';
 import { alpha, type Palette } from './palette';
-import { drawEnemy, drawTower, glow, polygon, roundRect, towerColour } from './sprites';
+import { FRAME, GROUND, SpriteCache } from './sprite-cache';
+import { drawEnemy, drawTower, glow, roundRect } from './sprites';
+import { paintTerrain } from './terrain';
 
 export interface BoardView {
   /** Cell under the pointer or the keyboard cursor. */
@@ -24,6 +28,18 @@ interface Snapshot {
   y: number;
 }
 
+/** Pedestal radius in model units (art/blender/render_sprite.py). */
+const PEDESTAL = 0.36;
+/** How much of a cell a defender's pedestal spans. */
+const PEDESTAL_SPAN = 0.94;
+/** Ortho camera tilt: a height h on screen is h times this. */
+const TILT = Math.cos((35 * Math.PI) / 180);
+
+/** Pixels per model unit for a defender, so its pedestal fills the tile. */
+function towerScale(kind: TowerKind, s: number): number {
+  return kind === 'wall' ? (s * 1.02) / 0.9 : (s * PEDESTAL_SPAN) / (2 * PEDESTAL);
+}
+
 export class BoardRenderer {
   readonly effects: Effects;
   private ctx: CanvasRenderingContext2D;
@@ -34,6 +50,7 @@ export class BoardRenderer {
   private prev = new Map<number, Snapshot>();
   private fired = new Map<number, number>();
   private hits = new Map<number, number>();
+  private sprites = new SpriteCache();
   /** Game-time clock used for recoil and hit flashes (seconds). */
   private clock = 0;
 
@@ -67,6 +84,7 @@ export class BoardRenderer {
     this.canvas.width = Math.max(1, Math.round(rect.width * this.dpr));
     this.canvas.height = Math.max(1, Math.round(this.cell * game.grid.height));
     this.layer = null;
+    this.sprites.clear();
   }
 
   /** The map cell under a client (CSS pixel) position. */
@@ -120,12 +138,10 @@ export class BoardRenderer {
 
     this.drawRoutes(game, time, view);
     this.drawFields(game, view);
-    this.drawGates(game, time);
-    this.drawTowers(game, time, view);
-    this.drawEnemies(game, lerp, time);
+    this.drawActors(game, lerp, time, view);
     this.drawShots(game, lerp);
     this.effects.draw(ctx, s);
-    this.drawCursor(time, view);
+    this.drawCursor(view);
 
     if (this.effects.alarm > 0) {
       const w = this.canvas.width;
@@ -153,140 +169,27 @@ export class BoardRenderer {
     layer.width = this.canvas.width;
     layer.height = this.canvas.height;
     const ctx = layer.getContext('2d');
-    if (!ctx) return layer;
-    const s = this.cell;
-    const p = this.palette;
-    const { width, height } = game.grid;
-
-    const bg = ctx.createRadialGradient(
-      layer.width / 2,
-      layer.height / 2,
-      0,
-      layer.width / 2,
-      layer.height / 2,
-      layer.width * 0.7,
-    );
-    bg.addColorStop(0, p.bg);
-    bg.addColorStop(1, p.bgDeep);
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, layer.width, layer.height);
-
-    const tile = (x: number, y: number) => tileAt(game.grid, x, y);
-
-    // Rock: hatched, with a rim where it meets open ground.
-    ctx.save();
-    ctx.beginPath();
-    for (let y = 0; y < height; y++)
-      for (let x = 0; x < width; x++) if (tile(x, y) === '#') ctx.rect(x * s, y * s, s, s);
-    ctx.fillStyle = p.bgDeep;
-    ctx.fill();
-    ctx.clip();
-    ctx.strokeStyle = alpha(p.line, 0.35);
-    ctx.lineWidth = Math.max(1, s * 0.02);
-    ctx.beginPath();
-    for (let k = -height; k < width + height; k += 0.5) {
-      ctx.moveTo(k * s, 0);
-      ctx.lineTo((k - height) * s, height * s);
-    }
-    ctx.stroke();
-    ctx.restore();
-    ctx.strokeStyle = p.line;
-    ctx.lineWidth = Math.max(1, s * 0.03);
-    ctx.beginPath();
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (tile(x, y) !== '#') continue;
-        const edge = (x1: number, y1: number, x2: number, y2: number) => {
-          ctx.moveTo(x1 * s, y1 * s);
-          ctx.lineTo(x2 * s, y2 * s);
-        };
-        if (tile(x, y - 1) !== '#' && y > 0) edge(x, y, x + 1, y);
-        if (tile(x, y + 1) !== '#' && y < height - 1) edge(x, y + 1, x + 1, y + 1);
-        if (tile(x - 1, y) !== '#' && x > 0) edge(x, y, x, y + 1);
-        if (tile(x + 1, y) !== '#' && x < width - 1) edge(x + 1, y, x + 1, y + 1);
-      }
-    }
-    ctx.stroke();
-
-    // Floor tiles and sockets (pads).
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const t = tile(x, y);
-        if (t === '.') {
-          roundRect(ctx, x * s + s * 0.04, y * s + s * 0.04, s * 0.92, s * 0.92, s * 0.08);
-          ctx.fillStyle = alpha(p.surface, 0.9);
-          ctx.fill();
-          ctx.strokeStyle = alpha(p.line, 0.6);
-          ctx.lineWidth = Math.max(1, s * 0.015);
-          ctx.stroke();
-          ctx.fillStyle = alpha(p.lineStrong, 0.6);
-          ctx.beginPath();
-          ctx.arc((x + 0.5) * s, (y + 0.5) * s, Math.max(0.8, s * 0.025), 0, Math.PI * 2);
-          ctx.fill();
-        } else if (t === '^') {
-          const inset = s * 0.1;
-          roundRect(ctx, x * s + inset, y * s + inset, s - inset * 2, s - inset * 2, s * 0.1);
-          ctx.fillStyle = alpha(p.surface, 0.7);
-          ctx.fill();
-          ctx.strokeStyle = alpha(p.line, 0.9);
-          ctx.lineWidth = Math.max(1, s * 0.02);
-          ctx.stroke();
-          ctx.strokeStyle = alpha(p.lineStrong, 0.9);
-          const a = x * s + inset;
-          const b = y * s + inset;
-          const w = s - inset * 2;
-          const k = w * 0.22;
-          ctx.beginPath();
-          ctx.moveTo(a, b + k);
-          ctx.lineTo(a, b);
-          ctx.lineTo(a + k, b);
-          ctx.moveTo(a + w - k, b + w);
-          ctx.lineTo(a + w, b + w);
-          ctx.lineTo(a + w, b + w - k);
-          ctx.stroke();
-        }
-      }
-    }
-
-    // Lanes: a recessed channel joining the centres of neighbouring lane tiles.
-    const laneLike = (x: number, y: number) => {
-      const t = tile(x, y);
-      return t === '=' || t === 'S' || t === 'C';
-    };
-    const segments: [number, number, number, number][] = [];
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (!laneLike(x, y)) continue;
-        if (laneLike(x + 1, y)) segments.push([x, y, x + 1, y]);
-        if (laneLike(x, y + 1)) segments.push([x, y, x, y + 1]);
-        // Spawns and the core on the border open out of the board.
-        if (tile(x, y) === 'S' || tile(x, y) === 'C') {
-          if (x === 0) segments.push([x, y, x - 0.6, y]);
-          if (x === width - 1) segments.push([x, y, x + 0.6, y]);
-          if (y === 0) segments.push([x, y, x, y - 0.6]);
-          if (y === height - 1) segments.push([x, y, x, y + 0.6]);
-        }
-      }
-    }
-    const strokeSegments = (width2: number, colour: string, dash: number[] = []) => {
-      ctx.strokeStyle = colour;
-      ctx.lineWidth = width2;
-      ctx.setLineDash(dash);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      for (const [x1, y1, x2, y2] of segments) {
-        ctx.moveTo((x1 + 0.5) * s, (y1 + 0.5) * s);
-        ctx.lineTo((x2 + 0.5) * s, (y2 + 0.5) * s);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-    };
-    strokeSegments(s * 0.74, p.line);
-    strokeSegments(s * 0.66, p.bgDeep);
-    strokeSegments(s * 0.5, alpha(p.surface, 0.8));
-    strokeSegments(Math.max(1, s * 0.02), alpha(p.ion, 0.12), [s * 0.08, s * 0.16]);
-
+    if (ctx) paintTerrain(ctx, game.grid, this.cell);
     return layer;
+  }
+
+  // ---- Sprites ----------------------------------------------------------------------------
+
+  /**
+   * Draws a sprite standing at (x, y) in pixels, scaled to `unit` pixels per model unit.
+   * Returns false while the image is still loading.
+   */
+  private blit(name: string, unit: number, x: number, y: number, flip = false): boolean {
+    const size = FRAME * unit;
+    const img = this.sprites.get(name, size);
+    if (!img) return false;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(x, y);
+    if (flip) ctx.scale(-1, 1);
+    ctx.drawImage(img, -size / 2, -size * (0.5 + GROUND), size, size);
+    ctx.restore();
+    return true;
   }
 
   // ---- Dynamic layers ---------------------------------------------------------------------
@@ -317,12 +220,12 @@ export class BoardRenderer {
     };
     const preview = view.ghost?.routes;
     if (preview && view.ghost?.valid) {
-      paths(game.routes(), alpha(p.ion, 0.16), Math.max(1.5, s * 0.06));
-      paths(preview, alpha(p.signal, 0.75), Math.max(2, s * 0.08));
+      paths(game.routes(), alpha(p.text, 0.25), Math.max(1.5, s * 0.06));
+      paths(preview, alpha(p.signal, 0.9), Math.max(2, s * 0.09));
     } else {
       paths(
         game.routes(),
-        alpha(p.ion, game.phase === 'build' ? 0.55 : 0.28),
+        alpha(p.text, game.phase === 'build' ? 0.6 : 0.3),
         Math.max(1.5, s * 0.07),
       );
     }
@@ -331,32 +234,32 @@ export class BoardRenderer {
   private drawFields(game: Game, view: BoardView): void {
     const ctx = this.ctx;
     const s = this.cell;
-    const p = this.palette;
     for (const t of game.towers) {
       if (t.kind !== 'throttle' && t.kind !== 'beacon') continue;
       const c = centre(t);
       const r = game.stat(t).range * s;
+      const colour = TOWER_ART[t.kind].colour;
       ctx.save();
       if (t.kind === 'throttle') {
         const g = ctx.createRadialGradient(c.x * s, c.y * s, 0, c.x * s, c.y * s, r);
-        g.addColorStop(0, alpha(p.ion, 0.02));
-        g.addColorStop(0.85, alpha(p.ion, 0.07));
-        g.addColorStop(1, alpha(p.ion, 0.12));
+        g.addColorStop(0, alpha(colour, 0.03));
+        g.addColorStop(0.85, alpha(colour, 0.1));
+        g.addColorStop(1, alpha(colour, 0.18));
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(c.x * s, c.y * s, r, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        ctx.strokeStyle = alpha(p.ion, 0.22);
+        ctx.strokeStyle = alpha(colour, 0.35);
         ctx.setLineDash([s * 0.06, s * 0.12]);
         ctx.lineWidth = Math.max(1, s * 0.025);
         ctx.beginPath();
         ctx.arc(c.x * s, c.y * s, r, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
-        // Links to the towers it boosts.
-        ctx.strokeStyle = alpha(p.ion, 0.55);
-        ctx.lineWidth = Math.max(1, s * 0.04);
+        // Threads of light to the agents it boosts.
+        ctx.strokeStyle = alpha(colour, 0.7);
+        ctx.lineWidth = Math.max(1, s * 0.035);
         for (const o of game.towers) {
           if (o === t || TOWERS[o.kind].passive) continue;
           if (Math.max(Math.abs(o.x - t.x), Math.abs(o.y - t.y)) > 1) continue;
@@ -375,7 +278,7 @@ export class BoardRenderer {
         centre(sel),
         game.stat(sel).range,
         TOWERS[sel.kind].minRange,
-        towerColour(sel.kind, p),
+        TOWER_ART[sel.kind].colour,
       );
   }
 
@@ -388,8 +291,8 @@ export class BoardRenderer {
     const ctx = this.ctx;
     const s = this.cell;
     ctx.save();
-    ctx.fillStyle = alpha(colour, 0.06);
-    ctx.strokeStyle = alpha(colour, 0.6);
+    ctx.fillStyle = alpha(colour, 0.08);
+    ctx.strokeStyle = alpha(colour, 0.8);
     ctx.lineWidth = Math.max(1, s * 0.03);
     ctx.setLineDash([s * 0.1, s * 0.08]);
     ctx.beginPath();
@@ -397,7 +300,7 @@ export class BoardRenderer {
     ctx.fill();
     ctx.stroke();
     if (minRange) {
-      ctx.strokeStyle = alpha(this.palette.danger, 0.5);
+      ctx.strokeStyle = alpha(this.palette.danger, 0.7);
       ctx.beginPath();
       ctx.arc(c.x * s, c.y * s, minRange * s, 0, Math.PI * 2);
       ctx.stroke();
@@ -405,63 +308,98 @@ export class BoardRenderer {
     ctx.restore();
   }
 
-  private drawGates(game: Game, time: number): void {
+  /** Gates, the core, defenders and faults, sorted by their ground line. */
+  private drawActors(game: Game, lerp: number, time: number, view: BoardView): void {
+    const actors: { y: number; draw: () => void }[] = [];
+    for (const sp of game.grid.spawns) {
+      const c = centre(sp);
+      actors.push({ y: c.y, draw: () => this.drawGate(c, time) });
+    }
+    const core = centre(game.grid.core);
+    actors.push({ y: core.y, draw: () => this.drawCore(game, core, time) });
+    for (const t of game.towers) {
+      const c = centre(t);
+      actors.push({ y: c.y, draw: () => this.drawTower(t, c, time, view) });
+    }
+    for (const e of game.enemies) {
+      const prev = this.prev.get(e.id);
+      const x = prev ? prev.x + (e.x - prev.x) * lerp : e.x;
+      const y = prev ? prev.y + (e.y - prev.y) * lerp : e.y;
+      actors.push({ y, draw: () => this.drawFault(e, x, y, time) });
+    }
+    actors.sort((a, b) => a.y - b.y);
+    for (const a of actors) a.draw();
+  }
+
+  private drawGate(c: { x: number; y: number }, time: number): void {
+    const s = this.cell;
+    const t = this.reducedMotion ? 0 : time;
+    glow(this.ctx, c.x * s, c.y * s, s * (0.8 + 0.08 * Math.sin(t * 2)), '#8a3bd1', 0.35);
+    if (!this.blit(SCENERY_ART.gate, s / 0.95, c.x * s, c.y * s)) {
+      const ctx = this.ctx;
+      ctx.strokeStyle = alpha(this.palette.danger, 0.85);
+      ctx.lineWidth = Math.max(1.2, s * 0.045);
+      ctx.beginPath();
+      ctx.arc(c.x * s, c.y * s, s * 0.32, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  private drawCore(game: Game, c: { x: number; y: number }, time: number): void {
     const ctx = this.ctx;
     const s = this.cell;
     const p = this.palette;
     const t = this.reducedMotion ? 0 : time;
-    for (const sp of game.grid.spawns) {
-      const c = centre(sp);
-      glow(ctx, c.x * s, c.y * s, s * 0.9, p.danger, 0.25);
-      ctx.save();
-      ctx.translate(c.x * s, c.y * s);
-      ctx.strokeStyle = alpha(p.danger, 0.85);
-      ctx.lineWidth = Math.max(1.2, s * 0.045);
-      ctx.rotate(t * 0.8);
-      ctx.setLineDash([s * 0.14, s * 0.1]);
-      ctx.beginPath();
-      ctx.arc(0, 0, s * 0.32, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-    const core = centre(game.grid.core);
     const health = game.lives / game.maxLives;
     const beat = 0.5 + 0.5 * Math.sin(t * 2.2);
-    glow(ctx, core.x * s, core.y * s, s * (1.1 + beat * 0.2), p.ion, 0.35);
+    glow(ctx, c.x * s, c.y * s, s * (1.0 + beat * 0.15), '#ffd97a', 0.3);
+    // Integrity ring on the ground: the share of lives left.
     ctx.save();
-    ctx.translate(core.x * s, core.y * s);
-    ctx.fillStyle = p.surface;
-    ctx.strokeStyle = p.ion;
-    ctx.lineWidth = Math.max(1.5, s * 0.05);
-    polygon(ctx, 6, s * 0.34, Math.PI / 6);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = alpha(p.ion, 0.5 + beat * 0.4);
-    polygon(ctx, 6, s * 0.16, Math.PI / 6 + t * 0.5);
-    ctx.fill();
-    // Integrity ring: the share of lives left.
-    ctx.strokeStyle = alpha(p.line, 0.9);
-    ctx.lineWidth = Math.max(2, s * 0.06);
+    ctx.translate(c.x * s, c.y * s);
+    ctx.scale(1, 0.62);
+    ctx.lineWidth = Math.max(2, s * 0.07);
+    ctx.strokeStyle = alpha(p.bgDeep, 0.7);
     ctx.beginPath();
     ctx.arc(0, 0, s * 0.46, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.strokeStyle = health > 0.5 ? p.ion : health > 0.25 ? p.warning : p.danger;
+    ctx.strokeStyle = health > 0.5 ? p.success : health > 0.25 ? p.warning : p.danger;
     ctx.beginPath();
     ctx.arc(0, 0, s * 0.46, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * health);
     ctx.stroke();
     ctx.restore();
+    this.blit(SCENERY_ART.core, s * 1.35, c.x * s, c.y * s + s * 0.1);
   }
 
-  private drawTowers(game: Game, time: number, view: BoardView): void {
+  private drawTower(
+    t: Game['towers'][number],
+    c: { x: number; y: number },
+    time: number,
+    view: BoardView,
+  ): void {
     const ctx = this.ctx;
     const s = this.cell;
-    const p = this.palette;
-    for (const t of game.towers) {
-      const c = centre(t);
-      const since = this.clock - (this.fired.get(t.id) ?? -10);
-      const recoil = Math.max(0, 1 - since / 0.18);
+    const since = this.clock - (this.fired.get(t.id) ?? -10);
+    const recoil = Math.max(0, 1 - since / 0.18);
+    const art = TOWER_ART[t.kind];
+    const x = c.x * s;
+    const y = c.y * s;
+    if (view.selected === t.id) {
       ctx.save();
-      ctx.translate(c.x * s, c.y * s);
+      ctx.translate(x, y);
+      ctx.scale(1, 0.62);
+      ctx.strokeStyle = this.palette.text;
+      ctx.lineWidth = Math.max(1.5, s * 0.05);
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.52, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // Defenders turn towards their target; the sprites face right unless marked otherwise.
+    const flip = t.kind !== 'wall' && Math.cos(t.angle) < 0 !== !!art.facesLeft;
+    const lift = this.reducedMotion ? 0 : recoil * s * 0.04;
+    if (!this.blit(towerSprite(t.kind, t.level), towerScale(t.kind, s), x, y - lift, flip)) {
+      ctx.save();
+      ctx.translate(x, y);
       drawTower(
         ctx,
         {
@@ -472,116 +410,135 @@ export class BoardRenderer {
           recoil,
         },
         s,
-        p,
+        this.palette,
       );
-      if (view.selected === t.id) {
-        ctx.strokeStyle = p.text;
-        ctx.lineWidth = Math.max(1.5, s * 0.04);
-        roundRect(ctx, -s * 0.48, -s * 0.48, s * 0.96, s * 0.96, s * 0.14);
-        ctx.stroke();
-      }
       ctx.restore();
     }
   }
 
-  private drawEnemies(game: Game, lerp: number, time: number): void {
+  private drawFault(e: Game['enemies'][number], x: number, y: number, time: number): void {
     const ctx = this.ctx;
     const s = this.cell;
     const p = this.palette;
-    for (const e of game.enemies) {
-      const prev = this.prev.get(e.id);
-      const x = prev ? prev.x + (e.x - prev.x) * lerp : e.x;
-      const y = prev ? prev.y + (e.y - prev.y) * lerp : e.y;
-      const spec = ENEMIES[e.kind];
-      const heading = e.next ? Math.atan2(e.next.y + 0.5 - e.y, e.next.x + 0.5 - e.x) : 0;
-      const since = this.clock - (this.hits.get(e.id) ?? -10);
-      ctx.save();
-      ctx.translate(x * s, y * s);
-      if (e.slow < 0.999) {
-        ctx.strokeStyle = alpha(p.ion, 0.7);
-        ctx.lineWidth = Math.max(1, s * 0.03);
-        ctx.beginPath();
-        ctx.arc(0, 0, spec.radius * s * 1.45, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      if (e.shield > 0) {
-        ctx.strokeStyle = alpha(p.warning, 0.6);
-        ctx.lineWidth = Math.max(1, s * 0.03);
-        polygon(ctx, 6, spec.radius * s * 1.6, time);
-        ctx.stroke();
-      }
+    const spec = ENEMIES[e.kind];
+    const art = ENEMY_ART[e.kind];
+    const heading = e.next ? Math.atan2(e.next.y + 0.5 - e.y, e.next.x + 0.5 - e.x) : 0;
+    const since = this.clock - (this.hits.get(e.id) ?? -10);
+    const flash = Math.max(0, 1 - since / 0.08);
+    const ring = spec.radius * s * 1.5;
+    const unit = ring / enemyRing(e.kind);
+    const px = x * s;
+    const py = y * s;
+    const t = this.reducedMotion ? 0 : time + e.id;
+    const cloaked = !!spec.cloaked && !e.revealed;
+
+    ctx.save();
+    if (cloaked) ctx.globalAlpha = 0.3 + 0.12 * Math.sin(t * 6);
+    if (e.slow < 0.999) this.groundRing(px, py, ring * 1.1, alpha(TOWER_ART.throttle.colour, 0.9));
+    if (e.shield > 0) this.groundRing(px, py, ring * 1.3, alpha(p.warning, 0.8));
+    const flip = Math.cos(heading) < 0;
+    const drawn = this.blit(art.sprite, unit, px, py, flip);
+    if (drawn && flash > 0) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha *= flash * 0.6;
+      this.blit(art.sprite, unit, px, py, flip);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    if (!drawn) {
+      ctx.translate(px, py);
       drawEnemy(
         ctx,
-        {
-          kind: e.kind,
-          r: spec.radius * s,
-          heading,
-          time: this.reducedMotion ? 0 : time + e.id,
-          revealed: e.revealed,
-          flash: Math.max(0, 1 - since / 0.08),
-        },
+        { kind: e.kind, r: spec.radius * s, heading, time: t, revealed: e.revealed, flash },
         p,
       );
-      ctx.restore();
-      if (e.hp < e.maxHp && (e.revealed || !spec.cloaked)) {
-        const w = Math.max(s * 0.5, spec.radius * s * 2.2);
-        const bx = x * s - w / 2;
-        const by = y * s - spec.radius * s - s * 0.16;
-        ctx.fillStyle = alpha(p.bgDeep, 0.85);
-        ctx.fillRect(bx - 1, by - 1, w + 2, Math.max(3, s * 0.07) + 2);
-        const k = e.hp / e.maxHp;
-        ctx.fillStyle = k > 0.5 ? p.success : k > 0.25 ? p.warning : p.danger;
-        ctx.fillRect(bx, by, w * k, Math.max(3, s * 0.07));
-      }
     }
+    ctx.restore();
+
+    if (e.hp < e.maxHp && !cloaked) {
+      const w = Math.max(s * 0.5, ring * 1.6);
+      const h = Math.max(3, s * 0.07);
+      const bx = px - w / 2;
+      const by = py - art.size * unit * TILT - s * 0.12;
+      ctx.fillStyle = alpha(p.bgDeep, 0.85);
+      ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
+      const k = e.hp / e.maxHp;
+      ctx.fillStyle = k > 0.5 ? p.success : k > 0.25 ? p.warning : p.danger;
+      ctx.fillRect(bx, by, w * k, h);
+    }
+  }
+
+  private groundRing(x: number, y: number, r: number, colour: string): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1, 0.6);
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = Math.max(1.5, this.cell * 0.04);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawShots(game: Game, lerp: number): void {
     const ctx = this.ctx;
     const s = this.cell;
-    const p = this.palette;
     for (const shot of game.shots) {
       const prev = this.prev.get(shot.id);
       const x = prev ? prev.x + (shot.x - prev.x) * lerp : shot.x;
       const y = prev ? prev.y + (shot.y - prev.y) * lerp : shot.y;
       if (shot.kind === 'bolt') {
+        // An arrow: a shaft along the flight, a pale head and a green fletching glint.
         const px = prev?.x ?? shot.from.x;
         const py = prev?.y ?? shot.from.y;
-        ctx.strokeStyle = alpha(p.signal, 0.6);
-        ctx.lineWidth = Math.max(1.5, s * 0.06);
+        const a = Math.atan2(y - py, x - px);
+        ctx.save();
+        ctx.translate(x * s, y * s);
+        ctx.rotate(a);
+        ctx.strokeStyle = '#6b4a2b';
+        ctx.lineWidth = Math.max(1.2, s * 0.035);
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(px * s - (x - px) * s * 0.8, py * s - (y - py) * s * 0.8);
-        ctx.lineTo(x * s, y * s);
+        ctx.moveTo(-s * 0.26, 0);
+        ctx.lineTo(0, 0);
         ctx.stroke();
-        glow(ctx, x * s, y * s, s * 0.22, p.signal, 0.7);
-        ctx.fillStyle = p.text;
+        ctx.fillStyle = '#e9e4d8';
         ctx.beginPath();
-        ctx.arc(x * s, y * s, Math.max(1.2, s * 0.045), 0, Math.PI * 2);
+        ctx.moveTo(s * 0.06, 0);
+        ctx.lineTo(-s * 0.02, -s * 0.03);
+        ctx.lineTo(-s * 0.02, s * 0.03);
+        ctx.closePath();
         ctx.fill();
+        ctx.fillStyle = TOWER_ART.pulse.colour;
+        ctx.fillRect(-s * 0.26, -s * 0.025, s * 0.06, s * 0.05);
+        ctx.restore();
       } else {
+        // A boulder thrown by an Ent: an arc in the air, a shadow and a landing mark.
         const k = Math.min(1, (shot.age + lerp * DT) / shot.flight);
         const lift = Math.sin(Math.PI * k) * s * 0.9;
-        // Landing marker and shadow.
-        ctx.strokeStyle = alpha(p.signal, 0.35 + 0.4 * k);
+        ctx.strokeStyle = alpha(TOWER_ART.mortar.colour, 0.35 + 0.45 * k);
         ctx.lineWidth = Math.max(1, s * 0.03);
         ctx.beginPath();
         ctx.arc(shot.to.x * s, shot.to.y * s, shot.splash * s * (1.2 - 0.2 * k), 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = alpha(p.bgDeep, 0.6);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
         ctx.beginPath();
         ctx.ellipse(x * s, y * s, s * 0.1, s * 0.05, 0, 0, Math.PI * 2);
         ctx.fill();
-        glow(ctx, x * s, y * s - lift, s * 0.3, p.signal, 0.6);
-        ctx.fillStyle = p.signalSoft;
+        const r = Math.max(2, s * 0.09);
+        ctx.fillStyle = '#7d7a78';
         ctx.beginPath();
-        ctx.arc(x * s, y * s - lift, Math.max(1.5, s * 0.08), 0, Math.PI * 2);
+        ctx.arc(x * s, y * s - lift, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#a7a39f';
+        ctx.beginPath();
+        ctx.arc(x * s - r * 0.3, y * s - lift - r * 0.3, r * 0.45, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  private drawCursor(time: number, view: BoardView): void {
+  private drawCursor(view: BoardView): void {
     const cell = view.hover;
     if (!cell) return;
     const ctx = this.ctx;
@@ -589,7 +546,7 @@ export class BoardRenderer {
     const p = this.palette;
     const ghost = view.ghost;
     if (ghost) {
-      const colour = ghost.valid ? towerColour(ghost.kind, p) : p.danger;
+      const colour = ghost.valid ? TOWER_ART[ghost.kind].colour : p.danger;
       if (ghost.kind !== 'wall')
         this.rangeRing(
           centre(cell),
@@ -599,19 +556,17 @@ export class BoardRenderer {
         );
       ctx.save();
       ctx.globalAlpha = ghost.valid ? 0.75 : 0.35;
-      ctx.translate((cell.x + 0.5) * s, (cell.y + 0.5) * s);
-      drawTower(
-        ctx,
-        {
-          kind: ghost.kind,
-          level: 0,
-          angle: -Math.PI / 2,
-          time: this.reducedMotion ? 0 : time,
-          recoil: 0,
-        },
-        s,
-        p,
-      );
+      const x = (cell.x + 0.5) * s;
+      const y = (cell.y + 0.5) * s;
+      if (!this.blit(towerSprite(ghost.kind, 0), towerScale(ghost.kind, s), x, y)) {
+        ctx.translate(x, y);
+        drawTower(
+          ctx,
+          { kind: ghost.kind, level: 0, angle: -Math.PI / 2, time: 0, recoil: 0 },
+          s,
+          p,
+        );
+      }
       ctx.restore();
     }
     const colour = ghost
@@ -620,7 +575,7 @@ export class BoardRenderer {
         : p.danger
       : view.cursor
         ? p.signal
-        : alpha(p.text, 0.5);
+        : alpha(p.text, 0.6);
     ctx.save();
     ctx.strokeStyle = colour;
     ctx.lineWidth = Math.max(1.5, s * 0.04);

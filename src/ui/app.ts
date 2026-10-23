@@ -15,6 +15,7 @@ import {
 import { LEVELS } from '../levels/levels';
 import { BoardRenderer, type BoardView } from '../render/board';
 import { readPalette, type Palette } from '../render/palette';
+import { preloadSprites } from '../render/sprite-cache';
 import { drawEnemy, drawTower } from '../render/sprites';
 import { strings, type Lang, type Strings } from './i18n';
 import { loadProgress, recordResult, starsFor, type Progress } from './progress';
@@ -117,6 +118,7 @@ export class App {
     this.palette = readPalette();
     this.canvas = $('board') as HTMLCanvasElement;
     this.renderer = new BoardRenderer(this.canvas, this.palette, opts.reducedMotion);
+    void preloadSprites();
     this.progress = loadProgress();
   }
 
