@@ -24,7 +24,7 @@ const TERRAIN = {
   pebble: '#a58b65',
   crack: '#21160c',
   fog: 'rgba(214, 222, 232, 0.2)',
-  fogLater: 'rgba(214, 222, 232, 0.07)',
+  fogLater: 'rgba(214, 222, 232, 0.1)',
   fogEdge: 'rgba(214, 222, 232, 0)',
 } as const;
 

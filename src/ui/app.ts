@@ -655,7 +655,9 @@ export class App {
         );
       else if (won) primary = button(this.t.backToLevels, 'btn-primary', () => this.showMenu());
       else
-        primary = button(this.t.siege.retry, 'btn-primary', () => this.openChapter(chapter, false));
+        primary = button(this.t.siege.retry, 'btn-primary', () =>
+          this.openChapter(chapter, false, this.chapterStart),
+        );
       if (!won || more) button(this.t.backToLevels, 'btn-ghost', () => this.showMenu());
     } else if (won && next)
       primary = button(this.t.nextLevel, 'btn-primary', () => this.openLevel(this.levelIndex + 1));
