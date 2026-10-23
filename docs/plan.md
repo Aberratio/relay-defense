@@ -47,3 +47,6 @@ core.
 | 11  | kokot.it: case study PL/EN, lock entry, synced build, tests            | site tests and build pass                        |
 | 12  | Fresh-session review, merge, production deploy on Vercel               | the page is live on kokot.it                     |
 | 13  | Siege: five chapters on one map, carried defence, hardships, proofs    | floor and chain solutions win in a test          |
+| 14  | Menu as a landing: live board, path of levels unlocked by wins         | unlock tests, smoke test, before/after shots     |
+
+Ideas for later stages (accounts, leaderboards, guest play) are in [later-stages.md](later-stages.md).

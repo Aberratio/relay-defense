@@ -16,7 +16,21 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${base}?lang=en`);
-  await page.locator('.level-card').first().click();
+  // Menu: the first levels are open, the fourth is locked and says so; unlock all opens it.
+  const locked = page.locator('.level-node').nth(3);
+  if ((await locked.getAttribute('aria-disabled')) !== 'true') fail('level 4 should be locked');
+  if (!(await locked.getAttribute('aria-label'))?.endsWith('locked'))
+    fail('a locked level should be announced as locked');
+  await locked.focus();
+  await page.keyboard.press('Enter');
+  await page.locator('#menu-status button').click();
+  if ((await locked.getAttribute('aria-disabled')) !== null) fail('unlock all left level 4 shut');
+  await page.evaluate(() => localStorage.removeItem('relay-defense:unlock-all:v1'));
+  await page.locator('.btn-play').click();
+  const first = await page.locator('.dialog .dialog-eyebrow').textContent();
+  if (!first?.startsWith('Level 1')) fail(`the call to action should open level 1, got ${first}`);
+  await page.goto(`${base}?lang=en`);
+  await page.locator('.level-node').first().click();
   await page.locator('.dialog .btn-primary').click();
   // Two Pulse agents on the sockets next to the first bend, then the first wave at top speed.
   const box = (await page.locator('#board').boundingBox()) ?? fail('no board');
@@ -70,7 +84,9 @@ try {
     `${base}?embed=1&lang=pl`,
   );
   if (!(height > 300)) fail(`implausible embed height ${height}`);
-  console.info(`Smoke test passed: level played, Siege opened, embed height ${height}px.`);
+  console.info(
+    `Smoke test passed: unlock path checked, level played, Siege opened, embed height ${height}px.`,
+  );
 } finally {
   await browser.close();
   server.httpServer.close();

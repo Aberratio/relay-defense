@@ -48,14 +48,22 @@
 
       <main class="screen screen-menu" id="menu">
         <section class="hero">
-          <h1 data-i18n="title"></h1>
-          <p class="tagline" data-i18n="tagline"></p>
-          <p class="intro" data-i18n="intro"></p>
+          <div class="hero-copy">
+            <h1 data-i18n="title"></h1>
+            <p class="tagline" data-i18n="tagline"></p>
+            <div class="hero-actions" id="hero-actions"></div>
+          </div>
+          <div class="hero-scene" id="hero-scene" aria-hidden="true">
+            <canvas class="showcase" id="showcase"></canvas>
+          </div>
         </section>
-        <section class="level-grid" aria-labelledby="levels-title">
-          <h2 id="levels-title" data-i18n="levels"></h2>
-          <p class="stars-rule" data-i18n="starsRule"></p>
+        <section class="trail" aria-labelledby="levels-title">
+          <div class="trail-head">
+            <h2 id="levels-title" data-i18n="levels"></h2>
+            <span class="trail-total" id="levels-total"></span>
+          </div>
           <ol class="levels" id="levels"></ol>
+          <div class="menu-status" id="menu-status" role="status" aria-live="polite"></div>
         </section>
         <section class="siege" id="siege" aria-labelledby="siege-title"></section>
       </main>
