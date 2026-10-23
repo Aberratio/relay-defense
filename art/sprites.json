@@ -1,0 +1,170 @@
+{
+  "camera": {
+    "elevation": 35,
+    "orthoScale": 1.45,
+    "targetZ": 0.45,
+    "pixels": 256
+  },
+  "sprites": [
+    {
+      "name": "archer",
+      "model": "quaternius-rpg-characters/Ranger.fbx",
+      "textures": "quaternius-rpg-characters/textures",
+      "textureAliases": {
+        "Bow_Texture": "Ranger_Bow_Texture"
+      },
+      "side": "good",
+      "tiers": 3,
+      "size": 1,
+      "yaw": 15,
+      "colour": [0.25, 0.85, 0.35]
+    },
+    {
+      "name": "druid",
+      "model": "quaternius-rpg-characters/Wizard.fbx",
+      "textures": "quaternius-rpg-characters/textures",
+      "side": "good",
+      "tiers": 3,
+      "size": 1,
+      "yaw": 15,
+      "colour": [0.3, 0.6, 1],
+      "recipe": "druid"
+    },
+    {
+      "name": "unicorn",
+      "model": "poly-pizza/horse.glb",
+      "side": "good",
+      "tiers": 3,
+      "size": 1,
+      "yaw": 230,
+      "colour": [0.75, 0.45, 1],
+      "recipe": "unicorn"
+    },
+    {
+      "name": "ent",
+      "model": "poly-pizza/tree-gnarled.glb",
+      "side": "good",
+      "tiers": 3,
+      "size": 1.05,
+      "yaw": 0,
+      "colour": [1, 0.55, 0.15],
+      "recipe": "ent",
+      "outline": false
+    },
+    {
+      "name": "dryad",
+      "model": "quaternius-rpg-characters/Rogue.fbx",
+      "textures": "quaternius-rpg-characters/textures",
+      "side": "good",
+      "tiers": 3,
+      "size": 1,
+      "yaw": 15,
+      "colour": [1, 0.45, 0.75],
+      "recipe": "dryad"
+    },
+    {
+      "name": "fairy",
+      "model": "quaternius-rpg-characters/Cleric.fbx",
+      "textures": "quaternius-rpg-characters/textures",
+      "side": "good",
+      "tiers": 3,
+      "size": 0.85,
+      "yaw": 15,
+      "colour": [1, 0.92, 0.4],
+      "recipe": "fairy"
+    },
+    {
+      "name": "thorns",
+      "model": "poly-pizza/hedge.glb",
+      "side": "good",
+      "pedestal": false,
+      "tiers": 1,
+      "size": 0.9,
+      "yaw": 0,
+      "colour": [0.6, 0.15, 0.15],
+      "recipe": "thorns"
+    },
+    {
+      "name": "goblin",
+      "model": "poly-pizza/imp.glb",
+      "side": "evil",
+      "size": 0.7,
+      "yaw": 20,
+      "colour": [0.35, 0.55, 0.2],
+      "recipe": "goblin"
+    },
+    {
+      "name": "spiderling",
+      "model": "poly-pizza/spider.glb",
+      "side": "evil",
+      "size": 0.45,
+      "yaw": 25,
+      "colour": [0.55, 0.35, 0.2],
+      "recipe": "spiderling"
+    },
+    {
+      "name": "troll",
+      "model": "poly-pizza/orc.glb",
+      "side": "evil",
+      "size": 0.95,
+      "yaw": 25,
+      "colour": [0.22, 0.28, 0.16],
+      "recipe": "troll"
+    },
+    {
+      "name": "wraith",
+      "model": "poly-pizza/ghost.glb",
+      "side": "evil",
+      "size": 0.8,
+      "yaw": 20,
+      "colour": [0.35, 0.25, 0.5],
+      "recipe": "wraith"
+    },
+    {
+      "name": "brood",
+      "model": "poly-pizza/spider.glb",
+      "side": "evil",
+      "size": 0.95,
+      "yaw": 25,
+      "colour": [0.7, 0.78, 0.5],
+      "recipe": "brood"
+    },
+    {
+      "name": "shaman",
+      "model": "poly-pizza/mushroom-king.glb",
+      "side": "evil",
+      "size": 0.8,
+      "yaw": 20,
+      "colour": [0.45, 0.25, 0.6],
+      "recipe": "shaman"
+    },
+    {
+      "name": "ogre",
+      "model": "poly-pizza/yeti.glb",
+      "side": "evil",
+      "size": 1,
+      "yaw": 20,
+      "colour": [0.6, 0.3, 0.2],
+      "recipe": "ogre"
+    },
+    {
+      "name": "heart-tree",
+      "model": "poly-pizza/tree-round.glb",
+      "side": "scene",
+      "size": 1.1,
+      "yaw": 0,
+      "colour": [1, 0.85, 0.45],
+      "recipe": "heart_tree",
+      "outline": false
+    },
+    {
+      "name": "portal",
+      "model": "poly-pizza/arch-round.glb",
+      "side": "scene",
+      "size": 0.95,
+      "yaw": 0,
+      "colour": [0.55, 0.15, 0.85],
+      "recipe": "portal"
+    }
+  ]
+}

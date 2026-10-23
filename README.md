@@ -63,6 +63,7 @@ Balancing a puzzle by hand is guesswork, so the repository carries its own tools
 src/engine/   pure TypeScript simulation, no DOM: map and flow-field routing, placement rules,
               agents, faults, shots, waves, economy; fixed 30 Hz tick; clone() for look-ahead
 src/levels/   the ten levels: ASCII maps, credits, waves, available agents, difficulty
+art/         CC0 source models, Blender scripts and the sprite manifest (art/README.md)
 src/render/   2D canvas renderer: cached background layer, interpolated movement, effects,
               particles; vector sprites shared with the UI icons; colours from the brand tokens
 src/ui/       menu, briefings, play screen, results, help; input (mouse, touch, keyboard);
@@ -114,12 +115,36 @@ Prettier. No framework and no runtime dependencies.
 | `npm run sim -- <id>`    | replays the reference solution and prints the board                   |
 | `npm run probe`          | careless-player win rate per level                                    |
 | `npm run tune -- <id>`   | solver and probe across enemy strength                                |
+| `npm run sprites`        | renders the character sprites with Blender (art/README.md)            |
 | `npm run screenshots`    | README screenshots (needs `npm run dev -- --port 5391`)               |
 | `npm run check:language` | English everywhere except the Polish UI dictionary                    |
 | `npm run check:wording`  | wording guard for the build and the docs                              |
 
 Polish text lives only in the Polish block of `src/ui/i18n.ts`; the language guard fails on it
 anywhere else.
+
+## Art
+
+The characters are free 3D models (CC0, public domain) given props and rendered to sprites in
+Blender by `npm run sprites`; the PNGs are committed. How it works and the full list of files:
+[art/README.md](art/README.md).
+
+| Role                        | Model                                         | Author     | Source                                                           |
+| --------------------------- | --------------------------------------------- | ---------- | ---------------------------------------------------------------- |
+| archer, druid, dryad, fairy | RPG Characters: Ranger, Wizard, Rogue, Cleric | Quaternius | https://opengameart.org/content/lowpoly-rpg-characters           |
+| unicorn                     | White Horse                                   | Quaternius | https://poly.pizza/m/bEdE4rmZy9                                  |
+| troll                       | Orc                                           | Quaternius | https://poly.pizza/m/5vO2YJsPEf                                  |
+| spiderling, brood mother    | Spider                                        | Quaternius | https://poly.pizza/m/yRYJiAJyiM                                  |
+| goblin                      | imp model                                     | Quaternius | https://poly.pizza/m/S7jYW6Amye                                  |
+| wraith                      | Ghost                                         | Quaternius | https://poly.pizza/m/Iip30bDHmu                                  |
+| shaman                      | Mushroom King                                 | Quaternius | https://poly.pizza/m/grnFTziU8u                                  |
+| ogre warlord                | Yeti                                          | Quaternius | https://poly.pizza/m/ceRHrn8HHE                                  |
+| ent, heart tree             | Tree (two variants)                           | Quaternius | https://poly.pizza/m/qZtx0AHhcy, https://poly.pizza/m/aVOxaHRPWe |
+| thorns                      | Hedge                                         | Quaternius | https://poly.pizza/m/df8uCl1YpK                                  |
+| portal                      | Arch Round                                    | Quaternius | https://poly.pizza/m/B9QABewqLv                                  |
+
+All models are CC0 1.0. The props added in Blender and the rendered sprites are MIT, like the
+code.
 
 ## Licence
 
