@@ -12,7 +12,7 @@ const fail = (msg: string) => {
   throw new Error(msg);
 };
 
-/** Frames the game in a parent page that sizes the frame to the reported height, as kokot.it does. */
+/** Frames the game in a parent page that sizes the frame to the reported height, like kokot.it. */
 const mount = async (page: Page, width: number, src: string): Promise<Frame> => {
   await page.evaluate(
     ([src, width]) => {
