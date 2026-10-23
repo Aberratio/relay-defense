@@ -64,12 +64,14 @@ Directions to weigh:
   progress, Keyboard), so each view fits on one screen; the dialog opens on the first.
 - **Show, not tell.** Replace the four steps with small pictures: the sprites and a frame of the
   board with the route preview, one line each.
-- **Less in the dialog.** The introduction already lives on the landing as the tagline; the
-  keyboard table could open only on demand (a details element or the `?` key).
+- **Less in the dialog.** The landing's tagline already says what the game is, so the
+  introduction could be shortened or dropped; the keyboard table could open only on demand (a
+  details element, or a new keyboard shortcut).
 
 Constraints that stay: focus kept inside the dialog and returned on close, Escape and a click
-outside close it, in `?embed=1` the height still follows the width only (the dialog opens near the top of
-the frame), phones 360-640 px without horizontal scrolling, every new string in EN and PL.
+outside close it, in `?embed=1` the height still follows the width only (the dialog opens near
+the top of the frame), phones 360-640 px without horizontal scrolling, every new string in EN and
+PL.
 
 ## 5. Smaller ideas for the menu
 
