@@ -85,6 +85,8 @@ export async function encodeWebp(jobs: { from: string; to: string }[]): Promise<
 
 if (process.argv[1]?.endsWith('webp.ts')) {
   const files = process.argv.slice(2);
+  const other = files.filter((f) => !/\.png$/i.test(f));
+  if (other.length) throw new Error(`not a .png file: ${other.join(', ')}`);
   for (const r of await encodeWebp(
     files.map((f) => ({ from: f, to: f.replace(/\.png$/i, '.webp') })),
   ))

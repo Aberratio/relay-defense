@@ -63,34 +63,34 @@ async function main(): Promise<void> {
   const exe = blender();
   const work = mkdtempSync(join(tmpdir(), 'sprites-'));
   const jobs: { from: string; to: string }[] = [];
-  for (const spec of manifest.sprites) {
-    if (only.size && !only.has(spec.name)) continue;
-    const tiers = spec.tiers ?? 1;
-    for (let tier = 1; tier <= tiers; tier++) {
-      const name = spriteFile(spec, tier);
-      const png = join(work, name.replace(/\.webp$/, '.png'));
-      execFileSync(
-        exe,
-        [
-          '--background',
-          '--factory-startup',
-          '--python-exit-code',
-          '1',
-          '--python',
-          resolve('art/blender/render_sprite.py'),
-          '--',
-          manifestPath,
-          spec.name,
-          String(tier),
-          png,
-        ],
-        { stdio: ['ignore', 'ignore', 'inherit'] },
-      );
-      if (!existsSync(png)) throw new Error(`Blender did not write ${png}`);
-      jobs.push({ from: png, to: join(out, name) });
-    }
-  }
   try {
+    for (const spec of manifest.sprites) {
+      if (only.size && !only.has(spec.name)) continue;
+      const tiers = spec.tiers ?? 1;
+      for (let tier = 1; tier <= tiers; tier++) {
+        const name = spriteFile(spec, tier);
+        const png = join(work, name.replace(/\.webp$/, '.png'));
+        execFileSync(
+          exe,
+          [
+            '--background',
+            '--factory-startup',
+            '--python-exit-code',
+            '1',
+            '--python',
+            resolve('art/blender/render_sprite.py'),
+            '--',
+            manifestPath,
+            spec.name,
+            String(tier),
+            png,
+          ],
+          { stdio: ['ignore', 'ignore', 'inherit'] },
+        );
+        if (!existsSync(png)) throw new Error(`Blender did not write ${png}`);
+        jobs.push({ from: png, to: join(out, name) });
+      }
+    }
     for (const r of await encodeWebp(jobs))
       console.info(`rendered ${r.to} (${r.bytes} B, mean drift ${r.meanDiff.toFixed(2)})`);
   } finally {
