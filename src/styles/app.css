@@ -443,7 +443,7 @@ kbd {
     box-shadow var(--duration-fast) var(--ease-out);
 }
 
-.trail-step:not(.is-locked) .level-node:hover {
+.trail-step:not(.is-locked, .is-next) .level-node:hover {
   border-color: rgb(255 181 71 / 0.6);
   background: var(--color-surface-raised);
 }
