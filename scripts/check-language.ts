@@ -33,7 +33,17 @@ export const ALLOWED: Allowance[] = [
   { path: /^src\/ui\/i18n\.ts$/, lines: (text) => blockLines(text, /^const pl: Strings = \{$/) },
 ];
 
-const BINARY_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.ico', '.woff', '.woff2']);
+const BINARY_EXT = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.ico',
+  '.woff',
+  '.woff2',
+  '.glb',
+  '.fbx',
+]);
 // Polish letters with diacritics, built from code points so the guard does not flag itself.
 const POLISH_LETTERS = [
   0x105, 0x107, 0x119, 0x142, 0x144, 0xf3, 0x15b, 0x17a, 0x17c, 0x104, 0x106, 0x118, 0x141, 0x143,

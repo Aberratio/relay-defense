@@ -24,7 +24,8 @@
     "check:language": "tsx scripts/check-language.ts",
     "tune": "tsx scripts/tune.ts",
     "solve": "tsx scripts/solve.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "sprites": "tsx scripts/sprites.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
