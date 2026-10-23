@@ -15,7 +15,8 @@ export function isUnlocked(
   if (index < 0 || index >= ids.length) return false;
   if (all || index < FREE_LEVELS) return true;
   // A level already won stays open, also one won out of order (through ?level=).
-  if (ids[index]! in progress) return true;
+  const id = ids[index];
+  if (id !== undefined && id in progress) return true;
   const before = ids[index - 1];
   return before !== undefined && before in progress;
 }
