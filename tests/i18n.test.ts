@@ -53,14 +53,14 @@ describe('i18n', () => {
 });
 
 // Built from a code point, so this file passes the language guard.
-const OACUTE = String.fromCodePoint(0xf3);
+const E_OGONEK = String.fromCodePoint(0x119);
 
 describe('Polish plurals', () => {
   it('agree with the number', () => {
     const a = strings('pl').announce;
-    expect(a.sold(1)).toBe('Sprzedano za 1 kredyt.');
-    expect(a.sold(22)).toBe('Sprzedano za 22 kredyty.');
-    expect(a.sold(25)).toBe(`Sprzedano za 25 kredyt${OACUTE}w.`);
-    expect(a.sold(12)).toBe(`Sprzedano za 12 kredyt${OACUTE}w.`);
+    expect(a.sold(1)).toBe(`Sprzedano za 1 monet${E_OGONEK}.`);
+    expect(a.sold(22)).toBe('Sprzedano za 22 monety.');
+    expect(a.sold(25)).toBe('Sprzedano za 25 monet.');
+    expect(a.sold(12)).toBe('Sprzedano za 12 monet.');
   });
 });

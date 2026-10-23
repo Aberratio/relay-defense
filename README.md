@@ -1,42 +1,55 @@
-# Relay Defense
+# Heartwood
 
-A tower defense game that rewards a plan over reflexes. Faults stream from the gates towards the
-core; you place agents, read every wave before it starts and pick the right answer to each threat.
-Ten levels, each built around one idea, every one of them proven winnable in CI.
+A tower defense game that rewards a plan over reflexes. Monsters pour out of the portals towards
+the Heart Tree; you place defenders (archers, druids, unicorns, ents, dryads, lantern fairies and
+thorn hedges), read every wave before it starts and pick the right answer to each threat. Ten
+levels, each built around one idea, every one of them proven winnable in CI.
 
-![Two Fronts: two gates, a maze on open floor, Lance beams through a column of Bulwarks](docs/screenshots/two-fronts-en.png)
+![Two Fronts: two portals, a maze of thorn hedges on the meadow, unicorn beams through a column of trolls](docs/screenshots/two-fronts-en.png)
 
 Play it on [kokot.it](https://kokot.it/en/projects/relay-defense/). The interface is in English and
-Polish.
+Polish. The repository keeps its first name, relay-defense; inside the code the defenders and
+monsters still go by their engine names (agents and faults), listed below.
 
 ## What makes it a logic game
 
 - **Nothing is hidden.** The whole wave list is on screen before the first wave, the simulation is
   deterministic, and the game waits between waves. A level is lost by a bad plan, not a slow
   click.
-- **Every fault asks a question.** Armour cuts every hit by a flat amount, so many small hits do
-  almost nothing. Cloaked Phantoms cannot be hit without a Beacon. Splitters burst into a swarm.
-  Menders repair whatever is near them. The Colossus shields its escort and shrugs off slows.
-- **Geometry matters.** The Lance pierces everything on a line, so it belongs at the end of a
-  straight lane. The Mortar has a dead zone and leads its target, so it pairs with a Throttle.
-  The Beacon boosts the eight tiles around it, and boosts add up. On open floor every agent is
-  part of the maze, and the preview shows the new route before you commit.
+- **Every monster asks a question.** Armour cuts every hit by a flat amount, so many small hits do
+  almost nothing. Invisible Wraiths cannot be hit without a Lantern Fairy. A Brood Mother bursts
+  into a swarm of Spiderlings. Shamans heal whatever is near them. The Ogre Warlord shields his
+  escort and shrugs off slows.
+- **Geometry matters.** The Unicorn's beam pierces everything on a line, so it belongs at the end
+  of a straight path. The Ent's boulder has a dead zone and leads its target, so it pairs with a
+  Dryad. The Lantern Fairy strengthens the eight tiles around her, and that adds up. On the meadow
+  every defender is part of the maze, and the preview shows the new route before you commit.
 - **Undo is free.** Selling in the same build phase refunds everything, so a layout can be tried
-  and taken back. The maze on open floor only changes between waves (sockets stay open), so
-  faults cannot be juggled back and forth by opening and closing a gap.
+  and taken back. The maze on the meadow only changes between waves (stone circles stay open), so
+  monsters cannot be juggled back and forth by opening and closing a gap.
 
-| Agent    | Role                                                             |
-| -------- | ---------------------------------------------------------------- |
-| Pulse    | cheap single-target fire, useless against armour                 |
-| Arc      | chain discharge across faults standing close together            |
-| Lance    | rail beam through every fault on its line, ignores armour        |
-| Mortar   | leading area shell, cannot hit close by                          |
-| Throttle | slow field; two fields do not stack                              |
-| Beacon   | reveals cloaked faults, boosts neighbouring agents; boosts stack |
-| Wall     | a cheap block for building mazes on open floor                   |
+| Defender      | Code name | Role                                                                   |
+| ------------- | --------- | ---------------------------------------------------------------------- |
+| Archer        | pulse     | cheap single-target arrows, useless against armour                     |
+| Druid         | arc       | chain lightning across monsters walking close together                 |
+| Unicorn       | lance     | a beam through every monster on its line, ignores armour               |
+| Ent           | mortar    | leading area boulder, cannot hit close by                              |
+| Dryad         | throttle  | slow field of roots; two fields do not stack                           |
+| Lantern Fairy | beacon    | reveals invisible monsters, strengthens neighbouring defenders; stacks |
+| Thorns        | wall      | a cheap hedge for building mazes on the meadow                         |
 
-Each agent except the Wall has three levels and four targeting modes (first, last, strongest,
-weakest).
+| Monster      | Code name | Trait                                      |
+| ------------ | --------- | ------------------------------------------ |
+| Goblin       | spark     | plain                                      |
+| Spiderling   | mite      | tiny, fast, in swarms                      |
+| Troll        | bulwark   | armour                                     |
+| Wraith       | phantom   | invisible until revealed                   |
+| Brood Mother | splitter  | bursts into three Spiderlings              |
+| Shaman       | mender    | heals the monsters around him              |
+| Ogre Warlord | colossus  | boss: heavy armour, resists slows, shields |
+
+Each defender except Thorns has three levels (a gold ring and a banner at level 2, a halo at
+level 3) and four targeting modes (first, last, strongest, weakest).
 
 ## How the levels are balanced
 
@@ -55,7 +68,7 @@ Balancing a puzzle by hand is guesswork, so the repository carries its own tools
   range of enemy strength. Each level ships at 50–90% of the strength the solver can still beat,
   lower for the tutorial levels and closer to the edge for the last ones.
 
-![Split Brain in Polish: Splitters bunched up under a Throttle field](docs/screenshots/split-brain-pl.png)
+![The Brood in Polish: Brood Mothers queuing at the portal under a Dryad field, unicorns and an archer waiting](docs/screenshots/split-brain-pl.png)
 
 ## Architecture
 
@@ -85,7 +98,7 @@ tests/        engine mechanics, levels (solutions win, careless play loses), i18
 
 ## Accessibility
 
-Keyboard play end to end: `1`–`7` pick an agent, arrow keys move a board cursor with spoken cell
+Keyboard play end to end: `1`–`7` pick a defender, arrow keys move a board cursor with spoken cell
 descriptions, `Enter` builds or selects, `Space` starts a wave or pauses, `U`/`S`/`T` upgrade,
 sell and change the target, `F` changes speed, `Esc` cancels. Game events are announced in a
 live region, dialogs keep focus and make the page behind them inert, and `prefers-reduced-motion` stops screen shake, idle animation

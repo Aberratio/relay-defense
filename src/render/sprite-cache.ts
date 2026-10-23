@@ -91,3 +91,72 @@ export class SpriteCache {
     return scaled;
   }
 }
+
+const bounds = new Map<string, { x: number; y: number; w: number; h: number }>();
+
+/**
+ * The box around a sprite's visible pixels above its ground line, so an icon shows the figure and
+ * not the frame, the pedestal or the ground ring.
+ */
+function visibleBox(name: string, img: HTMLImageElement) {
+  const hit = bounds.get(name);
+  if (hit) return hit;
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let box = { x: 0, y: 0, w, h };
+  if (ctx) {
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let x0 = w;
+    let y0 = h;
+    let x1 = -1;
+    let y1 = -1;
+    const ground0 = Math.round(h * (0.5 + GROUND + 0.03));
+    for (let y = 0; y < Math.min(h, ground0 + 1); y++)
+      for (let x = 0; x < w; x++)
+        if ((data[(y * w + x) * 4 + 3] ?? 0) > 24) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+    const ground = Math.round(h * (0.5 + GROUND + 0.03));
+    if (y1 > ground) y1 = ground;
+    if (x1 >= x0 && y1 >= y0) box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+  bounds.set(name, box);
+  return box;
+}
+
+/** Paints a sprite, cropped to its figure and centred, into a square canvas once it has loaded. */
+export function paintIcon(canvas: HTMLCanvasElement, name: string): void {
+  const img = image(name);
+  if (!img) return;
+  const paint = () => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || img.naturalWidth === 0) return;
+    const box = visibleBox(name, img);
+    const side = canvas.width;
+    const k = (side * 0.94) / Math.max(box.w, box.h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, side, side);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(
+      img,
+      box.x,
+      box.y,
+      box.w,
+      box.h,
+      (side - box.w * k) / 2,
+      (side - box.h * k) / 2,
+      box.w * k,
+      box.h * k,
+    );
+  };
+  if (img.complete && img.naturalWidth > 0) paint();
+  else img.addEventListener('load', paint, { once: true });
+}
