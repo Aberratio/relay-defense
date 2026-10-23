@@ -8,11 +8,13 @@ one set of lights and one outline, so models from different packs look like one 
 art/models/          the source models, unchanged (CC0)
 art/blender/         common.py (scene, camera, lights, outline) and render_sprite.py (recipes)
 art/sprites.json     one entry per sprite: model, heading, size, side, colour, levels, recipe
-src/assets/sprites/  the rendered PNGs the game loads (committed; CI never runs Blender)
+src/assets/sprites/  the sprites the game loads, as WebP (committed; CI never runs Blender)
 ```
 
 Render with `npm run sprites` (all) or `npm run sprites -- archer ogre` (some). It needs
 Blender 4.2 or newer (made with 5.2); set `BLENDER` to its executable if it is not in the default place.
+Blender writes PNG to a temporary folder and `scripts/webp.ts` encodes it to WebP at quality 0.85
+in headless Chromium (Playwright): a seventh of the PNG weight, with the alpha kept lossless.
 
 ## Conventions
 

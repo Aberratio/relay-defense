@@ -4,7 +4,7 @@
 // Every sprite is a square orthographic frame of FRAME model units, from a camera ELEVATION
 // degrees above the ground aimed TARGET_Z units up (art/sprites.json, kept in step by a test).
 // The ground point under a character therefore sits GROUND of the image below its centre.
-const urls = import.meta.glob('../assets/sprites/*.png', {
+const urls = import.meta.glob('../assets/sprites/*.webp', {
   eager: true,
   query: '?url',
   import: 'default',
@@ -29,7 +29,7 @@ const images = new Map<string, HTMLImageElement>();
 function image(name: string): HTMLImageElement | undefined {
   let img = images.get(name);
   if (!img && typeof Image !== 'undefined') {
-    const url = Object.entries(urls).find(([path]) => path.endsWith(`/${name}.png`))?.[1];
+    const url = Object.entries(urls).find(([path]) => path.endsWith(`/${name}.webp`))?.[1];
     if (!url) return undefined;
     img = new Image();
     img.decoding = 'async';
