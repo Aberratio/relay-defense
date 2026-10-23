@@ -84,8 +84,68 @@ try {
     `${base}?embed=1&lang=pl`,
   );
   if (!(height > 300)) fail(`implausible embed height ${height}`);
+
+  // Narrow embed: kokot.it frames the game 326 px wide on a 360 px phone and sizes the frame to
+  // the reported height. Neither the Siege nor a level may then scroll inside the frame, sideways
+  // or by a stray pixel of height.
+  const narrow = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  narrow.on('pageerror', (e) => errors.push(e.message));
+  await narrow.goto(base);
+  for (const lang of ['pl', 'en']) {
+    await narrow.evaluate((src) => {
+      const frame = document.createElement('iframe');
+      frame.src = src;
+      frame.style.cssText = 'display:block;width:326px;height:400px;border:0';
+      window.onmessage = (e: MessageEvent<{ type?: string; height?: number }>) => {
+        if (e.data?.type === 'relay-defense:height') frame.style.height = `${e.data.height}px`;
+      };
+      document.body.style.margin = '0';
+      document.body.replaceChildren(frame);
+    }, `${base}?embed=1&lang=${lang}`);
+    const frame =
+      (await (await narrow.waitForSelector('iframe')).contentFrame()) ?? fail('no frame');
+    const overflow = async (screen: string) => {
+      // Two frames for the height report and the frame resize to settle.
+      await frame.evaluate(
+        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      );
+      await narrow.waitForTimeout(200);
+      const { sw, cw, sh, ch, clipped } = await frame.evaluate(() => {
+        const el = document.scrollingElement ?? document.documentElement;
+        // A defender card whose name runs past its own box or into the next column.
+        const clipped = [...document.querySelectorAll<HTMLElement>('.tool')]
+          .filter((tool) => {
+            const name = tool.querySelector<HTMLElement>('.tool-name');
+            return (
+              tool.scrollWidth > tool.clientWidth ||
+              (name !== null && name.scrollWidth > name.clientWidth)
+            );
+          })
+          .map((tool) => tool.querySelector('.tool-name')?.textContent);
+        return {
+          sw: el.scrollWidth,
+          cw: el.clientWidth,
+          sh: el.scrollHeight,
+          ch: el.clientHeight,
+          clipped,
+        };
+      });
+      if (sw > cw) fail(`${screen} (${lang}) overflows a 326 px frame sideways: ${sw} > ${cw}`);
+      if (sh > ch) fail(`${screen} (${lang}) is taller than its reported height: ${sh} > ${ch}`);
+      if (clipped.length) fail(`${screen} (${lang}) clips defender names: ${clipped.join(', ')}`);
+    };
+    await frame.locator('.level-node').first().waitFor();
+    await overflow('menu');
+    await frame.locator('#siege .btn-primary').click();
+    await frame.locator('.dialog .btn-primary').click();
+    await overflow('Siege');
+    await frame.locator('#home').click();
+    await frame.locator('.level-node').first().click();
+    await frame.locator('.dialog .btn-primary').click();
+    await overflow('level 1');
+  }
   console.info(
-    `Smoke test passed: unlock path checked, level played, Siege opened, embed height ${height}px.`,
+    `Smoke test passed: unlock path checked, level played, Siege opened, embed height ${height}px, narrow embed fits.`,
   );
 } finally {
   await browser.close();
