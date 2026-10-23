@@ -1356,11 +1356,12 @@ kbd {
     min-height: 0;
   }
 
-  /* The panels stack under the board here, so the info panel keeps room for its tallest card (a
-     placed defender with its upgrade and sell buttons): picking a defender or a monster fills the
-     room instead of pushing the wave panel down and growing the frame. */
-  .panel-info {
-    min-height: 17.25rem;
+  /* In a frame the panels stack under the board here, so the info panel keeps room for its
+     tallest card (a placed defender with its upgrade and sell buttons, a Lantern Fairy boost line
+     and a Siege fog line, 309 px): picking a defender or a monster fills the room instead of
+     pushing the wave panel down and growing the frame. */
+  :root.embed .panel-info {
+    min-height: 19.5rem;
   }
 
   .side-inner {
@@ -1449,10 +1450,6 @@ kbd {
   min-height: 0;
 }
 
-.embed .topbar {
-  position: static;
-}
-
 /* A dialog taller than the screen behind it grows the frame instead of scrolling inside it. The app
    is a one-column grid: the top bar and the screen take the first two rows, and the overlay leaves
    the viewport to span every row, so the last row (empty while no dialog is open) stretches just
@@ -1465,6 +1462,7 @@ kbd {
 }
 
 .embed .topbar {
+  position: static;
   grid-area: 1 / 1;
 }
 
