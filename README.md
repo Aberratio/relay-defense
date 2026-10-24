@@ -3,8 +3,9 @@
 A tower defense game that rewards a plan over reflexes. Monsters pour out of the portals towards
 the Heart Tree; you place defenders (archers, druids, unicorns, ents, dryads, lantern fairies and
 thorn hedges), read every wave before it starts and pick the right answer to each threat. Ten
-levels, each built around one idea, and a five-chapter Siege on one map where the defence carries
-over and every chapter adds a hardship. Every level and every chapter is proven winnable in CI.
+levels, each built around one idea, a five-chapter Siege on one map where the defence carries
+over and every chapter adds a hardship, and a duel for two players played through links. Every
+level, every chapter and every duel map is proven in CI.
 
 ![Two Fronts: two portals, a maze of thorn hedges on the meadow, unicorn beams through a column of trolls](docs/screenshots/two-fronts-en.png)
 
@@ -98,6 +99,43 @@ adds a hardship:
 
 ![Siege, chapter 4: fog over the south-east, the defence carried over from the first three chapters](docs/screenshots/siege-en.png)
 
+## Duel
+
+A mode for two players, with no account and no server: the whole duel travels in three links.
+
+1. The challenger picks a map (the Siege meadow with both portals open, Two Fronts or Colossus)
+   and plays a sparring run against fixed waves shown in advance. Every move made before a wave
+   is written down: that is their defence. The game gives a link to send.
+2. The rival opens it, sees the defence on the board and composes four waves against it from 560
+   gold, watching them attack as often as they like. Then they build their own defence in a
+   sparring run and send a link back.
+3. The challenger composes waves against the rival's defence and sends the last link. Both see the
+   result: each side's waves against the other side's defence, played to the end. Whoever takes
+   more lives from the other Heart Tree wins; an equal count is a draw. Either bout can be
+   watched again.
+
+- **Prices.** Both sides get 560 gold. A monster costs half of what killing it pays (a Brood
+  Mother counts her Spiderlings), times its strength (×1 to ×4); a group's cost is rounded up. A
+  wave has one to four groups of up to 500 monsters.
+- **Why both play both sides.** Measured before the mode was built: whoever moves second and sees
+  the other's plan always wins, at every price tried (0.2 to 1.5 gold per bounty point). With
+  each player attacking the other's defence that advantage cancels out, and nothing has to be
+  hidden. Lives are counted without a limit, so the score tells a weak defence from a good one
+  instead of ending 20 to 20.
+- **A defence is a script.** It replays exactly against other waves; a move the gold no longer
+  covers is skipped and counted. In a sparring run moves wait for the build phase, because a
+  replay applies them only between waves.
+- **The same game in every browser.** The result is computed in each player's browser, so the
+  simulation avoids maths that JavaScript engines may round differently, and CI replays every
+  reference solution in Node, WebKit and Firefox.
+- **Proven in CI.** Each duel map carries a reference defence (the solver against the sparring
+  waves, won without a loss) and an attack composed against it that still takes lives
+  (`tests/duel.test.ts`, `tests/duel-solutions.ts`).
+- **Links.** The duel is in the hash (`#duel=`), so it never reaches a server. It is versioned:
+  a link made with an older balance says so instead of showing a different result.
+
+![Duel: the wave editor next to the rival's defence on Two Fronts](docs/screenshots/duel-en.png)
+
 ## How the levels are balanced
 
 Balancing a puzzle by hand is guesswork, so the repository carries its own tools:
@@ -165,7 +203,8 @@ previews a placement and the second builds.
 
 `?embed=1&lang=<en|pl>` lays the game out for an iframe: the height follows the width only, and
 the page posts `{ type: 'relay-defense:height', height }` to its parent whenever it changes.
-`?level=<id>` opens a level directly and `?mode=siege` the Siege at its checkpoint. This is how [kokot.it](https://kokot.it) embeds it.
+`?level=<id>` opens a level directly, `?mode=siege` the Siege at its checkpoint and `?mode=duel` a new
+duel; a duel link carries its state in the hash (`#duel=`). This is how [kokot.it](https://kokot.it) embeds it.
 
 ## Stack
 

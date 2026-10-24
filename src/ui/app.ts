@@ -86,6 +86,20 @@ export interface AppOptions {
   startDuel?: boolean;
 }
 
+/** Waves played by themselves against a defence script: an attack tried out, or a duel's replay. */
+interface Watch {
+  map: DuelMapId;
+  waves: Wave[];
+  defence: Solution;
+  /** Defence moves refused for lack of gold so far. */
+  skipped: number;
+  title: string;
+  /** What the end of the replay says about the lives taken. */
+  took: (n: number) => string;
+  backLabel: string;
+  back: () => void;
+}
+
 type Info =
   | { type: 'kind'; kind: TowerKind }
   | { type: 'tower'; id: number }
@@ -246,7 +260,7 @@ export class App {
   /** The waves being composed; the editor is open while this is set. */
   private draft: Wave[] | null = null;
   /** Waves being watched against a defence script, which plays its moves by itself. */
-  private watch: { waves: Wave[]; defence: Solution; skipped: number } | null = null;
+  private watch: Watch | null = null;
   private selectedKind: TowerKind | null = null;
   private selectedTower: number | null = null;
   private info: Info = null;
@@ -494,7 +508,8 @@ export class App {
   /** The heading of what is being played: a level or a Siege chapter. */
   private title(): string {
     if (this.sparring) return this.t.duel.sparTitle(this.t.duel.maps[this.sparring.map]);
-    if (this.duelLink && (this.draft || this.watch))
+    if (this.watch) return this.watch.title;
+    if (this.duelLink && this.draft)
       return this.t.duel.composeTitle(this.t.duel.maps[this.duelLink.duel.map]);
     if (this.chapter === null) return this.levelTitle(this.levelIndex);
     return `${this.t.siege.short(this.chapter + 1)}. ${this.chapterCopy(this.chapter).name}`;
@@ -579,6 +594,7 @@ export class App {
     this.renderLevels();
     this.renderStatus();
     this.renderSiege();
+    this.renderDuelMenu();
   }
 
   /**
@@ -696,8 +712,34 @@ export class App {
     this.openChapter(0, true, EMPTY_CARRY);
   }
 
+  /** The duel under the Siege: what it is, and the button that starts one. */
+  private renderDuelMenu(): void {
+    const t = this.t.duel;
+    const start = h('button', {
+      class: 'btn btn-primary',
+      text: t.start,
+      attrs: { type: 'button', 'data-role': 'duel' },
+    });
+    start.addEventListener('click', () => this.openDuelPick());
+    const art = h('span', { class: 'siege-art', attrs: { 'aria-hidden': 'true' } }, [
+      this.towerIcon('lance', 72),
+      this.enemyIcon('phantom', 96),
+    ]);
+    $('duel').replaceChildren(
+      art,
+      h('div', { class: 'siege-body' }, [
+        h('div', { class: 'siege-head' }, [
+          h('h2', { text: t.title, attrs: { id: 'duel-title' } }),
+          h('span', { class: 'siege-badge', text: t.hint }),
+        ]),
+        h('p', { class: 'siege-tagline', text: t.tagline }),
+        h('div', { class: 'siege-actions' }, [start]),
+      ]),
+    );
+  }
+
   private restart(): void {
-    if (this.watch) this.watchWaves(this.watch.waves);
+    if (this.watch) this.startWatch(this.watch);
     else if (this.draft !== null) return;
     else if (this.sparring) this.openSparring(this.sparring.map, false);
     else if (this.chapter !== null) this.openChapter(this.chapter, false, this.chapterStart);
@@ -1471,11 +1513,25 @@ export class App {
     const link = this.duelLink;
     const defence = this.target();
     if (!link || !defence) return;
+    const t = this.t.duel;
+    this.startWatch({
+      map: link.duel.map,
+      waves,
+      defence,
+      title: t.composeTitle(t.maps[link.duel.map]),
+      took: t.took,
+      backLabel: t.backToEditor,
+      back: () => this.openEditor(waves),
+    });
+  }
+
+  /** Waves against a defence script, played by themselves; the end says what they took. */
+  private startWatch(watch: Omit<Watch, 'skipped'>): void {
     this.chapter = null;
     this.sparring = null;
     this.draft = null;
-    this.watch = { waves, defence, skipped: 0 };
-    this.enter(new Game(duelLevel(link.duel.map, waves, SCORE_POOL)), false);
+    this.watch = { ...watch, skipped: 0 };
+    this.enter(new Game(duelLevel(watch.map, watch.waves, SCORE_POOL)), false);
   }
 
   /** Between watched waves: the defence makes its moves for the next wave, which then starts. */
@@ -1490,14 +1546,14 @@ export class App {
     this.flush();
   }
 
-  private openWatchEnd(game: Game, watch: { waves: Wave[]; skipped: number }): void {
+  private openWatchEnd(game: Game, watch: Watch): void {
     const t = this.t.duel;
-    const back = this.duelButton(t.backToEditor, 'btn-primary', () => this.openEditor(watch.waves));
+    const back = this.duelButton(watch.backLabel, 'btn-primary', watch.back);
     this.showDialog(
       'result',
       [
         h('p', { class: 'dialog-eyebrow', text: this.title() }),
-        h('h2', { text: t.took(SCORE_POOL - game.lives), attrs: { id: 'dialog-title' } }),
+        h('h2', { text: watch.took(SCORE_POOL - game.lives), attrs: { id: 'dialog-title' } }),
         ...(watch.skipped
           ? [h('p', { class: 'dialog-note', text: t.skipped(watch.skipped) })]
           : []),
@@ -1535,12 +1591,37 @@ export class App {
 
   /** A whole duel: both bouts scored, and who won. */
   private openDuelResult(duel: Duel): void {
-    if (!duel.rival || !duel.reply) return;
+    const rival = duel.rival;
+    const reply = duel.reply;
+    if (!rival || !reply) return;
     const t = this.t.duel;
     const r = rematch(
       duel.map,
-      { defence: duel.challenger, attack: duel.reply },
-      { defence: duel.rival.defence, attack: duel.rival.attack },
+      { defence: duel.challenger, attack: reply },
+      { defence: rival.defence, attack: rival.attack },
+    );
+    // Either bout played on the board: the same replay the score came from.
+    const replay = (waves: Wave[], defence: Solution) => () => {
+      this.leaveDuel();
+      this.startWatch({
+        map: duel.map,
+        waves,
+        defence,
+        title: t.replayTitle(t.maps[duel.map]),
+        took: t.tookBy,
+        backLabel: t.backToResult,
+        back: () => this.openDuelResult(duel),
+      });
+    };
+    const challengerWaves = this.duelButton(
+      t.watchChallenger,
+      'btn-ghost',
+      replay(reply, rival.defence),
+    );
+    const rivalWaves = this.duelButton(
+      t.watchRival,
+      'btn-ghost',
+      replay(rival.attack, duel.challenger),
     );
     const back = this.duelButton(this.t.backToLevels, 'btn-primary', () => this.showMenu());
     this.showDialog(
@@ -1552,7 +1633,7 @@ export class App {
           h('li', { text: t.challengerTook(r.challenger.taken) }),
           h('li', { text: t.rivalTook(r.rival.taken) }),
         ]),
-        h('div', { class: 'dialog-actions' }, [back]),
+        h('div', { class: 'dialog-actions' }, [challengerWaves, rivalWaves, back]),
       ],
       back,
     );

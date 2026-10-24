@@ -1,18 +1,44 @@
 // Browser smoke test of the production build: serves dist/ with `vite preview`, plays the first
 // level in Chromium through the UI, and checks the embed mode reports its height to a parent page.
-// Fails on any page error. Run after `npm run build`: `npm run smoke`.
-import { chromium, type Frame, type Page } from 'playwright';
+// Fails on any page error and on any Content Security Policy violation: the build is served with
+// the policy kokot.it sends. Run after `npm run build`: `npm run smoke`.
+import { chromium, type BrowserContext, type Frame, type Page } from 'playwright';
 import { preview } from 'vite';
 import { LEVELS } from '../src/levels/levels';
 import { SIEGE } from '../src/levels/siege';
 import { SOLUTIONS } from '../tests/solutions';
 
-const server = await preview({ preview: { port: 4719, strictPort: true, host: 'localhost' } });
+/** The policy kokot.it serves (kokot-it/vercel.json): no inline script or style, own origin only. */
+const KOKOT_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'";
+const server = await preview({
+  preview: {
+    port: 4719,
+    strictPort: true,
+    host: 'localhost',
+    headers: { 'Content-Security-Policy': KOKOT_CSP },
+  },
+});
 const base = 'http://localhost:4719/';
 const browser = await chromium.launch();
 const errors: string[] = [];
 const fail = (msg: string) => {
   throw new Error(msg);
+};
+/** Every page of the run reports a blocked script, style, font, image or request as an error. */
+const watchCsp = (context: BrowserContext) =>
+  context.on('page', (page) =>
+    page.on('console', (m) => {
+      if (m.type() === 'error' && /Content Security Policy/i.test(m.text()))
+        errors.push(`CSP: ${m.text()}`);
+    }),
+  );
+// browser.newPage() opens its page through this.newContext(), so this one wrapper covers both.
+const openContext = browser.newContext.bind(browser);
+browser.newContext = async (...args) => {
+  const context = await openContext(...args);
+  watchCsp(context);
+  return context;
 };
 
 /** Frames the game in a parent page that sizes the frame to the reported height, like kokot.it. */
@@ -468,7 +494,9 @@ try {
   // through and get the challenge link; it carries the Archer and reads back as a challenge.
   const duel = await browser.newPage({ viewport: { width: 360, height: 740 } });
   duel.on('pageerror', (e) => errors.push(e.message));
-  await duel.goto(`${base}?lang=en&mode=duel`);
+  // A new duel starts from the menu, under the Siege.
+  await duel.goto(`${base}?lang=en`);
+  await duel.locator('#duel [data-role="duel"]').click();
   await duel.locator('.dialog .duel-map[data-map="siege"]').click();
   await duel.locator('.dialog .btn-primary').click();
   const duelBox = (await duel.locator('#board').boundingBox()) ?? fail('no duel board');
@@ -560,6 +588,27 @@ try {
   const winner = await returned.locator('.dialog h2').textContent();
   if (!['The challenger wins', 'The rival wins', 'A draw'].includes(winner ?? ''))
     fail(`the duel result says "${winner}"`);
+  // Either bout can be watched from the result, and the replay ends on the same count.
+  const challengerTook = await returned.locator('.dialog .result-news li').first().textContent();
+  await returned.locator('.dialog .btn-ghost').first().click();
+  await returned.locator('#speed').click();
+  await returned.locator('#speed').click();
+  await returned.locator('.dialog-result h2').waitFor({ timeout: 120_000 });
+  const replayed = (await returned.locator('.dialog-result h2').textContent())?.match(/\d+/)?.[0];
+  if (!replayed || !challengerTook?.includes(` ${replayed} li`))
+    fail(`the replay took ${replayed} where the result says "${challengerTook}"`);
+  await returned.locator('.dialog .btn-primary').click();
+  if ((await returned.locator('.dialog h2').textContent()) !== winner)
+    fail('back from the replay the result changed');
+  const rivalTook = await returned.locator('.dialog .result-news li').nth(1).textContent();
+  await returned.locator('.dialog .btn-ghost').nth(1).click();
+  await returned.locator('.dialog-result h2').waitFor({ timeout: 120_000 });
+  const rivalReplayed = (await returned.locator('.dialog-result h2').textContent())?.match(
+    /\d+/,
+  )?.[0];
+  if (!rivalReplayed || !rivalTook?.includes(` ${rivalReplayed} li`))
+    fail(`the rival's replay took ${rivalReplayed} where the result says "${rivalTook}"`);
+  await returned.locator('.dialog .btn-primary').click();
   const direct = await browser.newPage({ viewport: { width: 360, height: 740 } });
   direct.on('pageerror', (e) => errors.push(e.message));
   await direct.goto(result);
