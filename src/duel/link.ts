@@ -86,8 +86,8 @@ export type DecodeResult =
   | { ok: false; reason: 'version' | 'invalid' };
 
 function cell(x: number, y: number): string {
-  // One hex digit each: every duel map is 16 x 10.
-  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 15 || y > 15)
+  // One hex digit for x, one decimal digit for y: every duel map is 16 x 10.
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 15 || y > 9)
     throw new Error(`cell (${x}, ${y}) does not fit a link`);
   return x.toString(16) + y.toString(16);
 }

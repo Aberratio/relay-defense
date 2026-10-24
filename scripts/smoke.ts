@@ -463,8 +463,40 @@ try {
   const wideFrame = await mount(wide, 966, `${base}?embed=1&lang=pl&level=split-brain`);
   await wideFrame.locator('.dialog .btn-primary').waitFor();
   await dialogFits(wideFrame, 'the split-brain briefing at 966 px');
+
+  // Duel: a new duel on a phone. Pick the Siege meadow, build one Archer, let the sparring waves
+  // through and get the challenge link; it carries the Archer and reads back as a challenge.
+  const duel = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  duel.on('pageerror', (e) => errors.push(e.message));
+  await duel.goto(`${base}?lang=en&mode=duel`);
+  await duel.locator('.dialog .duel-map[data-map="siege"]').click();
+  await duel.locator('.dialog .btn-primary').click();
+  const duelBox = (await duel.locator('#board').boundingBox()) ?? fail('no duel board');
+  const duelCell = duelBox.width / 16;
+  await duel.keyboard.press('1');
+  // Touch-free: a mouse click builds at once. Cell (3, 3) is meadow floor.
+  await duel.mouse.click(duelBox.x + 3.5 * duelCell, duelBox.y + 3.5 * duelCell);
+  await duel.keyboard.press('Escape');
+  await duel.locator('#speed').click();
+  await duel.locator('#speed').click();
+  await duel.locator('#start-wave').click();
+  // During the wave a move is refused: a replay could not repeat it.
+  await duel.keyboard.press('1');
+  await duel.mouse.click(duelBox.x + 4.5 * duelCell, duelBox.y + 3.5 * duelCell);
+  const waits = await duel.locator('#toast').textContent();
+  if (waits !== 'In a duel, moves wait until the wave is over.')
+    fail(`a move during a duel wave said "${waits}"`);
+  await duel.keyboard.press('Escape');
+  await duel.locator('.dialog .duel-link').waitFor({ timeout: 120_000 });
+  const link = await duel.locator('.dialog .duel-link').inputValue();
+  if (!link.startsWith(`${base}?lang=en#duel=1~1~s~p33...`)) fail(`the challenge link is ${link}`);
+  const wideDuel = await duel.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  if (wideDuel > 0) fail(`the duel share dialog scrolls sideways by ${wideDuel} px at 360 px`);
+
   console.info(
-    `Smoke test passed: unlock path checked, level played, Siege opened, accessibility checks, embed height ${height}px, narrow embed fits, dialogs fit the frame.`,
+    `Smoke test passed: unlock path checked, level played, Siege opened, accessibility checks, embed height ${height}px, narrow embed fits, dialogs fit the frame, duel challenge link made.`,
   );
 } finally {
   await browser.close();

@@ -166,5 +166,6 @@ describe('the duel link text', () => {
       duel: { map: 'siege', challenger: { level: 'duel-siege', waves: [[], [], [], []] } },
     });
     expect(() => encodeDefence({ level: 'x', waves: [[['up', 16, 0]]] })).toThrow();
+    expect(() => encodeDefence({ level: 'x', waves: [[['up', 0, 10]]] })).toThrow();
   });
 });

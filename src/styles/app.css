@@ -1445,6 +1445,33 @@ kbd {
   margin: 0 auto 0 0;
 }
 
+/* ---- Duel ---------------------------------------------------------------------------- */
+
+/* The three maps of a new duel: one button each, full width on a phone. */
+.duel-maps {
+  justify-content: stretch;
+}
+
+.duel-map {
+  flex: 1 1 10rem;
+}
+
+/* The challenge link: shown whole so it can be copied by hand where the clipboard is blocked. */
+.duel-link {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
 /* ---- Narrow screens ------------------------------------------------------------------ */
 
 @media (max-width: 960px) {

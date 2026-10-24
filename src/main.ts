@@ -16,6 +16,7 @@ new App({
   reducedMotion,
   startLevel: params.get('level') ?? undefined,
   startSiege: params.get('mode') === 'siege',
+  startDuel: params.get('mode') === 'duel',
 }).start();
 
 if (embed) reportHeightToParent();

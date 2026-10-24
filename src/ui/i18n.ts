@@ -319,6 +319,37 @@ const en = {
       focus: 'Ogre Warlord: heavy armour, huge life, resists slows, shields his neighbours.',
     },
   } satisfies Record<string, LevelCopy>,
+  duel: {
+    title: 'Duel',
+    pickTitle: 'Pick the duel map',
+    pickLead:
+      'You build a defence and send it as a link. Your rival composes waves against it and sends back a defence of their own, and you compose waves against theirs. Whoever takes more lives from the other Heart Tree wins.',
+    rules:
+      'Both sides get 560 gold: the defence to build with, the attack to buy monsters with. A monster costs half of what killing it pays, times its strength.',
+    maps: {
+      siege: 'Siege meadow',
+      'two-fronts': 'Two Fronts',
+      colossus: 'Colossus',
+    },
+    sparTitle: (map: string) => `Duel sparring: ${map}`,
+    sparEyebrow: 'Duel · your defence',
+    sparLead:
+      'Play the sparring waves like any level. Every move you make before a wave is written down: that is the defence your rival will attack.',
+    sparFocus:
+      'Moves wait for the build phase. Against other waves your gold can run short: a move it no longer covers is skipped.',
+    betweenWaves: 'In a duel, moves wait until the wave is over.',
+    shareTitle: 'Your challenge is ready',
+    held: (lives: number, max: number) =>
+      `Your defence held the sparring waves with ${lives} of ${max} lives.`,
+    broken: 'The sparring waves broke through. You can still send this defence, or play again.',
+    shareLead:
+      'Send this link to your rival. They will see your defence, compose waves against it and send you a link with their answer.',
+    linkLabel: 'Challenge link',
+    copy: 'Copy the link',
+    copied: 'Link copied.',
+    copyFailed: 'Copying is blocked here: select the link and copy it.',
+    sparAgain: 'Play the sparring again',
+  },
   siege: {
     title: 'Siege',
     tagline:
@@ -682,6 +713,37 @@ const pl: Strings = {
       focus:
         'Wódz ogrów: ciężki pancerz, ogromny zapas życia, odporny na spowolnienia, osłania sąsiadów.',
     },
+  },
+  duel: {
+    title: 'Pojedynek',
+    pickTitle: 'Wybierz mapę pojedynku',
+    pickLead:
+      'Budujesz obronę i wysyłasz ją jako link. Rywal układa przeciw niej fale i odsyła własną obronę, a ty układasz fale przeciw jego. Wygrywa ten, kto zabierze więcej żyć z Drzewa Serca drugiej strony.',
+    rules:
+      'Obie strony mają po 560 złota: obrona na budowę, atak na zakup potworów. Potwór kosztuje połowę tego, co płaci się za jego pokonanie, razy jego siła.',
+    maps: {
+      siege: 'Łąka oblężenia',
+      'two-fronts': 'Dwa fronty',
+      colossus: 'Kolos',
+    },
+    sparTitle: (map) => `Sparing pojedynku: ${map}`,
+    sparEyebrow: 'Pojedynek · twoja obrona',
+    sparLead:
+      'Rozegraj fale sparingowe jak każdy poziom. Każdy ruch przed falą jest zapisywany: to obrona, którą zaatakuje twój rywal.',
+    sparFocus:
+      'Ruchy czekają na fazę budowy. Przeciw innym falom może zabraknąć złota: ruch, na który go nie starczy, przepada.',
+    betweenWaves: 'W pojedynku ruchy czekają, aż fala się skończy.',
+    shareTitle: 'Twoje wyzwanie jest gotowe',
+    held: (lives, max) => `Twoja obrona odparła fale sparingowe, zostało ${lives} z ${max} żyć.`,
+    broken:
+      'Fale sparingowe przebiły się. Możesz mimo to wysłać tę obronę albo zagrać jeszcze raz.',
+    shareLead:
+      'Wyślij ten link rywalowi. Zobaczy twoją obronę, ułoży przeciw niej fale i odeśle ci link ze swoją odpowiedzią.',
+    linkLabel: 'Link z wyzwaniem',
+    copy: 'Skopiuj link',
+    copied: 'Link skopiowany.',
+    copyFailed: 'Kopiowanie jest tu zablokowane: zaznacz link i skopiuj go.',
+    sparAgain: 'Zagraj sparing jeszcze raz',
   },
   siege: {
     title: 'Oblężenie',
