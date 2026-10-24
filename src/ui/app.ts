@@ -1047,6 +1047,7 @@ export class App {
     const copy = h('button', { class: 'btn btn-primary', text: t.copy, attrs: { type: 'button' } });
     copy.addEventListener('click', () => {
       const failed = () => {
+        field.focus();
         field.select();
         status.textContent = t.copyFailed;
       };
@@ -2147,7 +2148,7 @@ export class App {
   }
 
   private trapFocus(e: KeyboardEvent): void {
-    const items = [...$('dialog').querySelectorAll<HTMLElement>('button, a[href]')];
+    const items = [...$('dialog').querySelectorAll<HTMLElement>('button, a[href], input')];
     const first = items[0];
     const last = items[items.length - 1];
     if (!first || !last) return;

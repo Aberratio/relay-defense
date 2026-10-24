@@ -494,6 +494,15 @@ try {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   if (wideDuel > 0) fail(`the duel share dialog scrolls sideways by ${wideDuel} px at 360 px`);
+  // Copy: either the clipboard takes it, or the link field gets the focus to copy by hand.
+  await duel.locator('.dialog .btn-primary').click();
+  await duel.locator('.dialog [role="status"]:not(:empty)').waitFor();
+  const copied = await duel.evaluate(() => ({
+    status: document.querySelector('.dialog [role="status"]')?.textContent,
+    focus: document.activeElement?.id,
+  }));
+  if (copied.status !== 'Link copied.' && copied.focus !== 'duel-link')
+    fail(`copying the link said "${copied.status}" and left the focus on ${copied.focus}`);
 
   console.info(
     `Smoke test passed: unlock path checked, level played, Siege opened, accessibility checks, embed height ${height}px, narrow embed fits, dialogs fit the frame, duel challenge link made.`,

@@ -19,10 +19,6 @@ export class Recorder {
     return ok;
   }
 
-  get empty(): boolean {
-    return this.waves.every((w) => w.length === 0);
-  }
-
   solution(level: string): Solution {
     return { level, waves: this.waves.map((w) => [...w]) };
   }

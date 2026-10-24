@@ -43,7 +43,6 @@ describe('recording a sparring run', () => {
   it('keeps each action under the wave it was taken before', () => {
     const game = new Game(gentle());
     const rec = new Recorder();
-    expect(rec.empty).toBe(true);
     rec.act(game, ['build', 'pulse', 3, 3]);
     playWave(game);
     rec.act(game, ['up', 3, 3]);
@@ -57,7 +56,6 @@ describe('recording a sparring run', () => {
       [],
       [],
     ]);
-    expect(rec.empty).toBe(false);
   });
 
   it('refuses an action during a wave, which a replay could not repeat', () => {
