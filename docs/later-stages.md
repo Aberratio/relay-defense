@@ -78,3 +78,20 @@ PL.
 - A short reel instead of a single wave on the showcase board: one wave each from a few levels.
 - Show the Siege chapter reached as a small map of the ridge rather than a row of cards.
 - A share link for a result (`?level=<id>` plus the stars), once there is a reason to share it.
+
+## 6. The duel, stage 2
+
+Stage 1 (decided, D-049 and D-050 in the owner's notes; plan in [plans/duel-stage-1.md](plans/duel-stage-1.md))
+plays a whole duel through three links, scored in each player's browser. Stage 2 would add what
+links cannot give:
+
+- **Accounts and a server replay.** The same `#duel=` text sent to a serverless function that
+  replays it with the same engine, so a result can be listed and trusted. Needs the server of
+  section 1 and secrets only the owner can set.
+- **Names.** Stage 1 says "challenger" and "rival". A name travels in a link to whoever opens it,
+  so names need moderation before they ship.
+- **The case study page.** Links open the game's own page; opening a duel inside the kokot.it frame
+  needs kokot.it to pass the hash on to the frame.
+- **Balance.** The duel's prices (half a bounty, ×1 to ×4 strength) were measured on the Siege
+  meadow; the other two maps are proven to be defendable and attackable, not tuned. Open question:
+  should a stronger monster cost more than in proportion to its strength?

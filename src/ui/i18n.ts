@@ -399,6 +399,15 @@ const en = {
     badLink: 'This duel link is broken or incomplete.',
     oldLink:
       'This duel link was made with another version of the game, so its result could differ. Ask for a new one.',
+    replayTitle: (map: string) => `Duel replay: ${map}`,
+    tookBy: (n: number) => `These waves took ${n} lives.`,
+    backToResult: 'Back to the result',
+    watchChallenger: "Watch the challenger's waves",
+    watchRival: "Watch the rival's waves",
+    hint: 'For two players',
+    tagline:
+      'Build a defence, send it as a link and compose waves against your rival. No account: the whole duel travels in three links.',
+    start: 'Start a duel',
   },
   siege: {
     title: 'Siege',
@@ -843,6 +852,15 @@ const pl: Strings = {
     badLink: 'Ten link pojedynku jest uszkodzony albo niepełny.',
     oldLink:
       'Ten link pojedynku powstał w innej wersji gry, więc wynik mógłby się różnić. Poproś o nowy.',
+    replayTitle: (map) => `Powtórka pojedynku: ${map}`,
+    tookBy: (n) => `Te fale zabrały ${n} żyć.`,
+    backToResult: 'Wróć do wyniku',
+    watchChallenger: 'Zobacz fale wyzywającego',
+    watchRival: 'Zobacz fale rywala',
+    hint: 'Dla dwóch graczy',
+    tagline:
+      'Zbuduj obronę, wyślij ją jako link i ułóż fale przeciw rywalowi. Bez konta: cały pojedynek mieści się w trzech linkach.',
+    start: 'Zacznij pojedynek',
   },
   siege: {
     title: 'Oblężenie',
