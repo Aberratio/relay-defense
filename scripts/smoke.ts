@@ -184,6 +184,30 @@ try {
     // Help is taller than a level: the frame grows to hold it, nothing scrolls inside the frame.
     await frame.locator('#help-open').click();
     await dialogFits(frame, `help in level 1 (${lang})`);
+    // A reader who scrolled the page down to the Close button must not be left below the game once
+    // the frame shrinks back: closing brings the board into view. Text follows the frame, as on a
+    // case study, so the page cannot simply run out of scroll.
+    await narrow.evaluate(() => {
+      const text = document.createElement('div');
+      text.style.height = '3000px';
+      document.body.append(text);
+      const frame = document.querySelector('iframe') as HTMLIFrameElement;
+      window.scrollTo(
+        0,
+        frame.getBoundingClientRect().bottom + window.scrollY - window.innerHeight,
+      );
+    });
+    await narrow.keyboard.press('Escape');
+    await settle(frame);
+    const board = await narrow.evaluate(async () => {
+      const iframe = document.querySelector('iframe') as HTMLIFrameElement;
+      const canvas = iframe.contentDocument?.getElementById('board');
+      const top = iframe.getBoundingClientRect().top + (canvas?.getBoundingClientRect().top ?? 0);
+      const bottom = top + (canvas?.getBoundingClientRect().height ?? 0);
+      return { top: Math.round(top), bottom: Math.round(bottom), view: window.innerHeight };
+    });
+    if (board.bottom <= 0 || board.top >= board.view)
+      fail(`closing help (${lang}) left the board off screen: ${board.top}..${board.bottom}`);
   }
 
   // Wide embed: kokot.it frames the game 966 px wide on a 1280 px screen, where a level is about
