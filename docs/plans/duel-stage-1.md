@@ -57,7 +57,7 @@ Corrections found while checking the premise:
    proves the solver beats them from 560 and the careless player wins at most 15%. Beat: no
    sparring, a free build. Self.
 7. Names: there are no nicknames in stage 1. The screens say "Challenger" (A) and "Rival" (B)
-   (PL: "Wyzywający", "Rywal"). Nicknames and moderation belong to stage 2. Self.
+   (Polish equivalents in the PL block of i18n.ts). Nicknames and moderation belong to stage 2. Self.
 8. No new localStorage key. The whole duel state is in the link. A half-made answer is lost on
    reload, and the screen says so before you leave. Self.
 9. The menu entry comes last. Steps 4–5 reach the duel only through `?mode=duel` or a `#duel=`

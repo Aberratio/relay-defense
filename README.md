@@ -146,7 +146,7 @@ tests/        engine mechanics, levels (solutions win, careless play loses), i18
   possible. Randomness lives only in the renderer's particles. The simulation also avoids the
   maths each JavaScript engine may round its own way (`Math.hypot`, trigonometry, `**`), so the
   same holds in every browser: CI replays every reference solution in Node, WebKit and Firefox
-  and compares the whole state after every tick (`npm run determinism`).
+  and compares every simulated number after every tick (`npm run determinism`).
 - **Smooth at any refresh rate.** The board remembers positions before each tick and
   interpolates between ticks; effects age in game time, so they keep pace with the speed setting
   and freeze on pause.

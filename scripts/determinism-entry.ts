@@ -23,7 +23,7 @@ export interface Fingerprint {
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
 
-class Hasher {
+export class Hasher {
   h = 0x811c9dc5;
   mix(n: number): void {
     f64[0] = n;
@@ -38,24 +38,48 @@ class Hasher {
    */
   state(game: Game): void {
     for (const e of game.enemies) {
-      this.mix(e.id);
-      this.mix(e.x);
-      this.mix(e.y);
-      this.mix(e.hp);
-      this.mix(e.slow);
-      this.mix(e.walked);
+      for (const n of [e.id, e.x, e.y, e.hp, e.maxHp, e.slow, e.shield, e.hold, e.scale, e.walked])
+        this.mix(n);
+      for (const n of [e.cell.x, e.cell.y, e.next?.x ?? -1, e.next?.y ?? -1]) this.mix(n);
+      this.mix(e.revealed ? 1 : 0);
+      this.mix(e.dead ? 1 : 0);
     }
     for (const t of game.towers) {
-      this.mix(t.id);
-      this.mix(t.cooldown);
+      for (const n of [
+        t.id,
+        t.level,
+        t.cooldown,
+        t.lockedCredits,
+        t.freshCredits,
+        t.damageDealt,
+        t.kills,
+      ])
+        this.mix(n);
     }
     for (const s of game.shots) {
-      this.mix(s.id);
-      this.mix(s.x);
-      this.mix(s.y);
+      for (const n of [
+        s.id,
+        s.towerId,
+        s.targetId,
+        s.x,
+        s.y,
+        s.to.x,
+        s.to.y,
+        s.age,
+        s.flight,
+        s.damage,
+        s.splash,
+      ])
+        this.mix(n);
     }
-    this.mix(game.credits);
-    this.mix(game.lives);
+    for (const n of [
+      game.credits,
+      game.lives,
+      game.stats.kills,
+      game.stats.leaks,
+      game.stats.spent,
+    ])
+      this.mix(n);
   }
 }
 
@@ -106,4 +130,17 @@ export function fingerprints(): Fingerprint[] {
     carry = game.carry();
   }
   return out;
+}
+
+/** The first difference between a reference run and the same run in another engine, or null. */
+export function differs(a: Fingerprint, b: Fingerprint | undefined): string | null {
+  if (!b) return 'missing';
+  if (a.name !== b.name) return `run ${b.name} in place of ${a.name}`;
+  if (a.outcome !== b.outcome) return `outcome ${a.outcome} vs ${b.outcome}`;
+  if (a.waves.length !== b.waves.length) return `${a.waves.length} waves vs ${b.waves.length}`;
+  const wave = a.waves.findIndex((w, i) => String(w) !== String(b.waves[i]));
+  if (wave >= 0) return `after wave ${wave + 1}: ${a.waves[wave]} vs ${b.waves[wave]}`;
+  if (a.ticks !== b.ticks) return `ticks ${a.ticks} vs ${b.ticks}`;
+  if (a.hash !== b.hash) return `state hash ${a.hash} vs ${b.hash}`;
+  return null;
 }

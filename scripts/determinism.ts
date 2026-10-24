@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { firefox, webkit, type BrowserType } from 'playwright';
 import { build } from 'vite';
-import { fingerprints, type Fingerprint } from './determinism-entry';
+import { differs, fingerprints, type Fingerprint } from './determinism-entry';
 
 const ENGINES: Record<string, BrowserType> = { webkit, firefox };
 const names = process.argv.slice(2);
@@ -43,17 +43,6 @@ async function bundle(): Promise<string> {
   }
 }
 
-/** The first difference between two runs, or null. */
-function differs(a: Fingerprint, b: Fingerprint | undefined): string | null {
-  if (!b) return 'missing';
-  if (a.outcome !== b.outcome) return `outcome ${a.outcome} vs ${b.outcome}`;
-  const wave = a.waves.findIndex((w, i) => String(w) !== String(b.waves[i]));
-  if (wave >= 0) return `after wave ${wave + 1}: ${a.waves[wave]} vs ${b.waves[wave]}`;
-  if (a.ticks !== b.ticks) return `ticks ${a.ticks} vs ${b.ticks}`;
-  if (a.hash !== b.hash) return `state hash ${a.hash} vs ${b.hash}`;
-  return null;
-}
-
 const reference = fingerprints();
 const code = await bundle();
 let failed = 0;
@@ -70,6 +59,9 @@ for (const name of chosen) {
   );
   const version = browser.version();
   await browser.close();
+  if (runs.length !== reference.length)
+    console.error(`  ${runs.length} replays in ${name}, ${reference.length} in Node`);
+  failed += Math.abs(runs.length - reference.length);
   const bad = reference
     .map((r, i) => ({ name: r.name, diff: differs(r, runs[i]) }))
     .filter((r) => r.diff !== null);
