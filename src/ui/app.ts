@@ -31,7 +31,7 @@ import {
   recordFound,
   type Bestiary,
 } from './bestiary';
-import { strings, type Lang, type Strings } from './i18n';
+import { strings, withLang, type Lang, type Strings } from './i18n';
 import {
   isSaveKey,
   loadProgress,
@@ -48,7 +48,7 @@ import {
   type Progress,
   type SiegeSave,
 } from './progress';
-import { introducedIn, newBest, newCards, openedBy } from './news';
+import { clearedBy, introducedIn, newBest, newCards, openedBy } from './news';
 import { showcaseScene, showcaseStart } from './showcase';
 import { isUnlocked, nextLevel } from './unlock';
 
@@ -177,11 +177,15 @@ export class App {
   private bestiary: Bestiary;
   /** The cards found in the level being played, for its result. */
   private foundHere: Bestiary = EMPTY_BESTIARY;
-  /** What the last finished level changed besides its cards: a record and the level it opened. */
-  private news: { best: { from: number; to: number } | null; opened: number | null } = {
-    best: null,
-    opened: null,
-  };
+  /**
+   * What the last finished level changed besides its cards: a record, the level it opened and
+   * whether it was the last level left unwon.
+   */
+  private news: {
+    best: { from: number; to: number } | null;
+    opened: number | null;
+    cleared: boolean;
+  } = { best: null, opened: null, cleared: false };
   /** The live board behind the menu's title, or null when it could not be set up. */
   private showcase: {
     renderer: BoardRenderer;
@@ -345,7 +349,13 @@ export class App {
     $('speed').addEventListener('click', () => this.cycleSpeed());
     $('start-wave').addEventListener('click', () => this.startWave());
     for (const btn of $('lang-switch').querySelectorAll<HTMLButtonElement>('button[data-lang]')) {
-      btn.addEventListener('click', () => this.applyLang(btn.dataset.lang === 'pl' ? 'pl' : 'en'));
+      btn.addEventListener('click', () => {
+        const lang = btn.dataset.lang === 'pl' ? 'pl' : 'en';
+        this.applyLang(lang);
+        // Standalone, the choice goes in the URL so a reload keeps it; in the embed the host sets it.
+        if (!this.opts.embed)
+          history.replaceState(history.state, '', withLang(location.search, lang) + location.hash);
+      });
     }
     window.addEventListener('storage', (e) => {
       if (isSaveKey(e.key)) this.reloadSaves();
@@ -424,10 +434,6 @@ export class App {
       this.renderWaves();
       this.renderControls();
     }
-    if (this.dialogKind === 'help') this.openHelp();
-    else if (this.dialogKind === 'bestiary') this.openBestiary();
-    else if (this.dialogKind === 'brief') this.openBrief();
-    else if (this.dialogKind === 'result') this.openResult();
   }
 
   private levelTitle(index: number): string {
@@ -772,7 +778,7 @@ export class App {
     this.closeDialog();
     this.game = game;
     this.foundHere = EMPTY_BESTIARY;
-    this.news = { best: null, opened: null };
+    this.news = { best: null, opened: null, cleared: false };
     this.meet(game.level.towers, []);
     this.renderer.setGame(this.game);
     this.selectedKind = null;
@@ -1160,7 +1166,7 @@ export class App {
         button(this.t.replay, 'btn-ghost', () => this.openLevel(this.levelIndex, false));
       button(this.t.backToLevels, 'btn-ghost', () => this.showMenu());
     }
-    const last = chapter !== null ? chapter + 1 >= SIEGE_CHAPTERS.length : !next;
+    const last = chapter !== null ? chapter + 1 >= SIEGE_CHAPTERS.length : this.news.cleared;
     const text = won
       ? this.t.victoryText(game.lives, game.maxLives)
       : this.t.defeatText(game.wave + 1, game.waveCount);
@@ -1556,7 +1562,7 @@ export class App {
     const idx = Math.min(game.wave, game.waveCount - 1);
     $('wave-title').textContent = done
       ? t.noMoreWaves
-      : `${running ? t.waveRunning : idx === game.waveCount - 1 ? t.lastWave : t.nextWave} · ${idx + 1}/${game.waveCount}`;
+      : `${game.phase === 'lost' ? t.waveLost : running ? t.waveRunning : idx === game.waveCount - 1 ? t.lastWave : t.nextWave} · ${idx + 1}/${game.waveCount}`;
     const start = $('start-wave') as HTMLButtonElement;
     start.textContent = t.startWave;
     start.disabled = game.phase !== 'build';
@@ -1826,6 +1832,7 @@ export class App {
       this.news = {
         best: newBest(before[game.level.id] ?? 0, stars),
         opened: openedBy(before, this.progress, this.unlockAll),
+        cleared: clearedBy(before, this.progress),
       };
     }
     window.clearTimeout(this.resultTimer);

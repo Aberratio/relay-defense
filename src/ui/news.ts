@@ -4,7 +4,7 @@
 import { ENEMY_KINDS, TOWER_KINDS } from '../engine/types';
 import { LEVELS } from '../levels/levels';
 import { firstLevel, type Bestiary } from './bestiary';
-import type { Progress } from './progress';
+import { allCleared, type Progress } from './progress';
 import { isUnlocked } from './unlock';
 
 /** A saved win beaten, or null: a first win is not a record. */
@@ -24,6 +24,12 @@ export function openedBy(before: Progress, after: Progress, all: boolean): numbe
       !(id in after) && !isUnlocked(n, ids, before, false) && isUnlocked(n, ids, after, false),
   );
   return i >= 0 ? i : null;
+}
+
+/** Whether this win completed the set: some level unwon before, every level won after. */
+export function clearedBy(before: Progress, after: Progress): boolean {
+  const ids = LEVELS.map((l) => l.id);
+  return !allCleared(ids, before) && allCleared(ids, after);
 }
 
 /** The characters a level brings in for the first time. */

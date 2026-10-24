@@ -53,6 +53,11 @@ export function recordResult(
   return next;
 }
 
+/** Whether every level in `ids` has a saved win (any number of stars). */
+export function allCleared(ids: readonly string[], progress: Progress): boolean {
+  return ids.every((id) => id in progress);
+}
+
 // ---- Unlock all ------------------------------------------------------------------------------
 
 const UNLOCK_ALL_KEY = 'relay-defense:unlock-all:v1';
