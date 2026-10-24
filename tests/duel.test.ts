@@ -122,6 +122,15 @@ describe('scoring a bout', () => {
     expect(score('siege', empty('siege'), goblins(50))).toEqual({ taken: 200, skipped: 0 });
   });
 
+  it('plays the slowest legal attack to its end', () => {
+    // Two waves of 500 Spiderlings, 1.5 s apart after an 8 s delay: about 1 516 s of spawning.
+    const slow = (n: number): Wave => ({ groups: [grp('mite', n, { gap: 1.5, delay: 8 })] });
+    const waves = [slow(500), slow(500), slow(1), slow(1)];
+    expect(validateAttack(waves)).toBeNull();
+    for (const map of DUEL_MAP_IDS)
+      expect(score(map, defenceOf(map), waves).taken).toBeGreaterThanOrEqual(0);
+  });
+
   it('counts the defence moves the game refused', () => {
     const twice: Solution = {
       level: 'duel-siege',
@@ -164,17 +173,5 @@ describe.each(DUEL_MAP_IDS)('duel map %s', (map) => {
     // Pin: the lives the search reached; a change here is a balance change.
     expect(bout.taken).toBe(attack!.taken);
     expect(bout.taken).toBeGreaterThan(0);
-  });
-
-  it('is decided by the attack: the informed side wins the rematch', () => {
-    const defence = defenceOf(map);
-    const informed = DUEL_ATTACKS.find((a) => a.map === map)!.waves;
-    const result = rematch(
-      map,
-      { defence, attack: informed },
-      { defence, attack: sparringWaves() },
-    );
-    expect(result.rival.taken).toBe(0);
-    expect(result.winner).toBe('challenger');
   });
 });

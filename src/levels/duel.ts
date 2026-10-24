@@ -25,6 +25,12 @@ export const DUEL_LIVES = 20;
  */
 export const SCORE_POOL = 10_000;
 
+/**
+ * Ticks a scored replay may run: one hour of game time. The slowest legal attack (two waves of 500
+ * Spiderlings 1.5 s apart after 8 s, one Spiderling in each other wave) spawns for about 1 516 s.
+ */
+export const SCORE_TICKS = 30 * 60 * 60;
+
 export const MAX_GROUPS = 4;
 export const MAX_COUNT = 500;
 export const HP_STEPS = [1, 1.5, 2, 3, 4] as const;
@@ -126,7 +132,11 @@ export function attackCost(waves: Wave[]): number {
   return waves.reduce((sum, w) => sum + w.groups.reduce((s, grp) => s + groupCost(grp), 0), 0);
 }
 
-/** Why an attack is not allowed, or null. Every field comes from a link, so nothing is trusted. */
+/**
+ * Why an attack is not allowed, or null. Every value comes from a link, so none is trusted; the
+ * shape (an array of waves with a `groups` array of objects) is the link decoder's guarantee
+ * (src/duel/link.ts builds every wave and group itself).
+ */
 export type AttackError =
   'waves' | 'groups' | 'enemy' | 'count' | 'hp' | 'gap' | 'delay' | 'spawn' | 'budget';
 
@@ -159,7 +169,7 @@ export interface Bout {
 /** One defence against one attack, played to the end of the last wave. */
 export function score(map: DuelMapId, defence: Solution, attack: Wave[]): Bout {
   const level = duelLevel(map, attack, SCORE_POOL);
-  const result = replay(level, { ...defence, level: level.id });
+  const result = replay(level, { ...defence, level: level.id }, SCORE_TICKS);
   return { taken: SCORE_POOL - result.lives, skipped: result.rejected.length };
 }
 
