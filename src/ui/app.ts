@@ -1,7 +1,10 @@
 // The application: menu, briefing, play screen, results and help. Owns the game loop (fixed 30 Hz
 // simulation, rendering every animation frame) and all input: mouse, touch and keyboard.
+import { Recorder } from '../duel/recorder';
+import { duelUrl } from '../duel/share';
 import { Game, type GameEvent } from '../engine/game';
 import { tileAt } from '../engine/grid';
+import { apply, type Action } from '../engine/replay';
 import { DT, ENEMIES, FOG_RANGE, TOWERS, type TowerLevel } from '../engine/stats';
 import {
   ENEMY_KINDS,
@@ -14,6 +17,7 @@ import {
   type PlaceError,
   type TowerKind,
 } from '../engine/types';
+import { DUEL_MAP_IDS, duelLevelId, sparringLevel, type DuelMapId } from '../levels/duel';
 import { LEVELS } from '../levels/levels';
 import { EMPTY_CARRY, SIEGE, SIEGE_CHAPTERS } from '../levels/siege';
 import { BoardRenderer, type BoardView } from '../render/board';
@@ -60,6 +64,8 @@ export interface AppOptions {
   startLevel?: string;
   /** Open the Siege straight away (`?mode=siege`), skipping the menu. */
   startSiege?: boolean;
+  /** Open a new duel straight away (`?mode=duel`): the map choice. */
+  startDuel?: boolean;
 }
 
 type Info =
@@ -213,6 +219,8 @@ export class App {
   private chapterStart: Carry = EMPTY_CARRY;
   /** Defenders brought into this chapter: selling one is a sale, not an undo. */
   private carried = new Set<number>();
+  /** The duel sparring being played, or null: its moves are written down as the defence. */
+  private sparring: { map: DuelMapId; recorder: Recorder } | null = null;
   private selectedKind: TowerKind | null = null;
   private selectedTower: number | null = null;
   private info: Info = null;
@@ -335,7 +343,10 @@ export class App {
       : -1;
     if (start >= 0) this.openLevel(start);
     else if (this.opts.startSiege) this.openChapter(this.siege.checkpoint?.chapter ?? 0);
-    else this.showMenu();
+    else if (this.opts.startDuel) {
+      this.showMenu();
+      this.openDuelPick();
+    } else this.showMenu();
     requestAnimationFrame((ts) => this.frame(ts));
   }
 
@@ -445,6 +456,7 @@ export class App {
 
   /** The heading of what is being played: a level or a Siege chapter. */
   private title(): string {
+    if (this.sparring) return this.t.duel.sparTitle(this.t.duel.maps[this.sparring.map]);
     if (this.chapter === null) return this.levelTitle(this.levelIndex);
     return `${this.t.siege.short(this.chapter + 1)}. ${this.chapterCopy(this.chapter).name}`;
   }
@@ -466,6 +478,7 @@ export class App {
     window.clearTimeout(this.resultTimer);
     this.game = null;
     this.chapter = null;
+    this.sparring = null;
     $('menu').hidden = false;
     $('game').hidden = true;
     $('stats').hidden = true;
@@ -645,7 +658,8 @@ export class App {
   }
 
   private restart(): void {
-    if (this.chapter !== null) this.openChapter(this.chapter, false, this.chapterStart);
+    if (this.sparring) this.openSparring(this.sparring.map, false);
+    else if (this.chapter !== null) this.openChapter(this.chapter, false, this.chapterStart);
     else this.openLevel(this.levelIndex, false);
   }
 
@@ -749,6 +763,7 @@ export class App {
     if (!level) return;
     this.levelIndex = index;
     this.chapter = null;
+    this.sparring = null;
     this.carried.clear();
     this.topUp = 0;
     this.enter(new Game(level), brief);
@@ -767,6 +782,7 @@ export class App {
     const carry = fitting(level, wanted);
     const game = Game.resume(level, carry);
     this.chapter = index;
+    this.sparring = null;
     this.chapterStart = carry;
     this.carried = new Set(game.towers.map((t) => t.id));
     this.topUp = index > 0 ? Math.max(0, game.credits - Math.floor(carry.credits)) : 0;
@@ -913,6 +929,10 @@ export class App {
   }
 
   private openBrief(): void {
+    if (this.sparring) {
+      this.openSparBrief();
+      return;
+    }
     if (this.chapter !== null) {
       this.openChapterBrief(this.chapter);
       return;
@@ -953,6 +973,119 @@ export class App {
       ],
       go,
     );
+  }
+
+  // ---- Duel -------------------------------------------------------------------------------
+
+  /** A new duel: the challenger picks the map their defence will stand on. */
+  private openDuelPick(): void {
+    const t = this.t.duel;
+    const maps = DUEL_MAP_IDS.map((map) => {
+      const b = h('button', {
+        class: 'btn btn-ghost duel-map',
+        text: t.maps[map],
+        attrs: { type: 'button', 'data-map': map },
+      });
+      b.addEventListener('click', () => this.openSparring(map));
+      return b;
+    });
+    this.showDialog(
+      'brief',
+      [
+        h('p', { class: 'dialog-eyebrow', text: t.title }),
+        h('h2', { text: t.pickTitle, attrs: { id: 'dialog-title' } }),
+        h('p', { class: 'dialog-lead', text: t.pickLead }),
+        h('p', { class: 'dialog-note', text: t.rules }),
+        h('div', { class: 'dialog-actions duel-maps' }, maps),
+      ],
+      maps[0],
+    );
+  }
+
+  /** The sparring run of a map; every move in it is written down as the player's defence. */
+  private openSparring(map: DuelMapId, brief = true): void {
+    this.chapter = null;
+    this.carried.clear();
+    this.topUp = 0;
+    this.sparring = { map, recorder: new Recorder() };
+    this.enter(new Game(sparringLevel(map)), brief);
+  }
+
+  private openSparBrief(): void {
+    const t = this.t.duel;
+    const go = h('button', {
+      class: 'btn btn-primary',
+      text: this.t.begin,
+      attrs: { type: 'button' },
+    });
+    go.addEventListener('click', () => this.closeDialog());
+    this.showDialog(
+      'brief',
+      [
+        h('p', { class: 'dialog-eyebrow', text: t.sparEyebrow }),
+        h('h2', { text: this.title(), attrs: { id: 'dialog-title' } }),
+        h('p', { class: 'dialog-lead', text: t.sparLead }),
+        h('div', { class: 'dialog-focus' }, [h('p', { text: t.sparFocus })]),
+        h('div', { class: 'dialog-actions' }, [go]),
+      ],
+      go,
+    );
+  }
+
+  /** After the sparring run: the defence as a challenge link to send. */
+  private openDuelShare(game: Game, sparring: { map: DuelMapId; recorder: Recorder }): void {
+    const t = this.t.duel;
+    const defence = sparring.recorder.solution(duelLevelId(sparring.map));
+    const url = duelUrl(location, this.lang, { map: sparring.map, challenger: defence });
+    const field = h('input', {
+      class: 'duel-link',
+      attrs: { type: 'text', readonly: '', id: 'duel-link', value: url },
+    });
+    field.value = url;
+    field.addEventListener('focus', () => field.select());
+    const status = h('p', { class: 'dialog-note', attrs: { role: 'status' } });
+    const copy = h('button', { class: 'btn btn-primary', text: t.copy, attrs: { type: 'button' } });
+    copy.addEventListener('click', () => {
+      const failed = () => {
+        field.focus();
+        field.select();
+        status.textContent = t.copyFailed;
+      };
+      // Inside a frame the clipboard can be off limits; the field stays there to copy by hand.
+      if (!navigator.clipboard) return failed();
+      navigator.clipboard.writeText(url).then(() => (status.textContent = t.copied), failed);
+    });
+    const again = h('button', {
+      class: 'btn btn-ghost',
+      text: t.sparAgain,
+      attrs: { type: 'button' },
+    });
+    again.addEventListener('click', () => this.openSparring(sparring.map, false));
+    const back = h('button', {
+      class: 'btn btn-ghost',
+      text: this.t.backToLevels,
+      attrs: { type: 'button' },
+    });
+    back.addEventListener('click', () => this.showMenu());
+    const held = game.phase === 'won';
+    this.showDialog(
+      'result',
+      [
+        h('p', { class: 'dialog-eyebrow', text: t.sparEyebrow }),
+        h('h2', { text: t.shareTitle, attrs: { id: 'dialog-title' } }),
+        h('p', {
+          class: 'dialog-lead',
+          text: held ? t.held(game.lives, game.maxLives) : t.broken,
+        }),
+        h('p', { text: t.shareLead }),
+        h('label', { class: 'info-label', text: t.linkLabel, attrs: { for: 'duel-link' } }),
+        field,
+        status,
+        h('div', { class: 'dialog-actions' }, [copy, again, back]),
+      ],
+      copy,
+    );
+    $('dialog').classList.add(held ? 'is-won' : 'is-lost');
   }
 
   private entry(icon: HTMLElement, name: string, text: string): HTMLElement {
@@ -1129,6 +1262,10 @@ export class App {
   private openResult(): void {
     const game = this.game;
     if (!game) return;
+    if (this.sparring) {
+      this.openDuelShare(game, this.sparring);
+      return;
+    }
     const won = game.phase === 'won';
     const stars = won ? starsFor(game.lives, game.maxLives) : 0;
     const actions: HTMLElement[] = [];
@@ -1470,8 +1607,7 @@ export class App {
           },
         });
         b.addEventListener('click', () => {
-          game.setMode(tower.id, mode);
-          this.renderInfo();
+          if (this.command(['mode', tower.x, tower.y, mode])) this.renderInfo();
         });
         modes.append(b);
       }
@@ -1707,12 +1843,13 @@ export class App {
       return;
     }
     if (this.selectedKind) {
+      if (this.sparringWaits(game)) return;
       const error = game.canPlace(this.selectedKind, cell.x, cell.y);
       if (error) {
         this.toast(this.t.placeErrors[error]);
         return;
       }
-      game.place(this.selectedKind, cell.x, cell.y);
+      if (!this.command(['build', this.selectedKind, cell.x, cell.y])) return;
       this.ghostCache = null;
       this.flush();
       return;
@@ -1723,22 +1860,43 @@ export class App {
   private upgradeSelected(): void {
     const game = this.game;
     if (!game || this.selectedTower === null) return;
-    if (game.upgrade(this.selectedTower)) {
+    const tower = game.towerById(this.selectedTower);
+    if (tower && this.command(['up', tower.x, tower.y])) {
       this.flush();
       this.renderInfo();
     }
+  }
+
+  /**
+   * Every move on the board goes through here. In a duel sparring the recorder applies it and
+   * writes it down; a move during a wave is refused, because a replay could not repeat it.
+   */
+  private command(action: Action): boolean {
+    const game = this.game;
+    if (!game) return false;
+    if (!this.sparring) return apply(game, action);
+    if (this.sparringWaits(game)) return false;
+    return this.sparring.recorder.act(game, action);
+  }
+
+  /** In a duel sparring, says so and returns true while a wave runs. */
+  private sparringWaits(game: Game): boolean {
+    if (!this.sparring || game.phase === 'build') return false;
+    this.toast(this.t.duel.betweenWaves);
+    return true;
   }
 
   private sellSelected(): void {
     const game = this.game;
     if (!game || this.selectedTower === null) return;
     const tower = game.towerById(this.selectedTower);
-    const blocked = tower ? game.canSell(tower) : null;
+    if (!tower || this.sparringWaits(game)) return;
+    const blocked = game.canSell(tower);
     if (blocked) {
       this.toast(this.t.placeErrors[blocked]);
       return;
     }
-    if (game.sell(this.selectedTower)) {
+    if (this.command(['sell', tower.x, tower.y])) {
       this.ghostCache = null;
       this.flush();
       this.selectTower(null);
@@ -1809,7 +1967,9 @@ export class App {
 
   private finish(game: Game): void {
     const chapter = this.chapter;
-    if (chapter !== null) {
+    if (this.sparring) {
+      // A sparring run saves nothing: the defence leaves in a link.
+    } else if (chapter !== null) {
       if (game.phase === 'won') {
         const more = chapter + 1 < SIEGE_CHAPTERS.length;
         const before = this.siege.stars[chapter] ?? 0;
@@ -1977,8 +2137,8 @@ export class App {
         const tower = this.selectedTower !== null ? game.towerById(this.selectedTower) : undefined;
         if (tower && !TOWERS[tower.kind].passive) {
           const i = TARGET_MODES.indexOf(tower.mode);
-          game.setMode(tower.id, TARGET_MODES[(i + 1) % TARGET_MODES.length] ?? 'first');
-          this.renderInfo();
+          const next = TARGET_MODES[(i + 1) % TARGET_MODES.length] ?? 'first';
+          if (this.command(['mode', tower.x, tower.y, next])) this.renderInfo();
         }
         break;
       }
@@ -1988,7 +2148,7 @@ export class App {
   }
 
   private trapFocus(e: KeyboardEvent): void {
-    const items = [...$('dialog').querySelectorAll<HTMLElement>('button, a[href]')];
+    const items = [...$('dialog').querySelectorAll<HTMLElement>('button, a[href], input')];
     const first = items[0];
     const last = items[items.length - 1];
     if (!first || !last) return;
