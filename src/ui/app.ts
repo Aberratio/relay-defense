@@ -324,18 +324,8 @@ export class App {
     for (const btn of $('lang-switch').querySelectorAll<HTMLButtonElement>('button[data-lang]')) {
       btn.addEventListener('click', () => this.applyLang(btn.dataset.lang === 'pl' ? 'pl' : 'en'));
     }
-    // Another tab or frame on this origin saved: show its wins too. The menu is redrawn only
-    // when it does not hold the focus, so a keyboard player is never thrown out of it.
     window.addEventListener('storage', (e) => {
-      if (!isSaveKey(e.key)) return;
-      this.progress = mergeProgress(loadProgress(), this.progress);
-      this.unlockAll = loadUnlockAll();
-      const stored = loadSiege(SIEGE.version, SIEGE_CHAPTERS.length);
-      this.siege = {
-        stars: mergeStars(stored.stars, this.siege.stars),
-        checkpoint: stored.checkpoint,
-      };
-      if (!$('menu').hidden && !$('menu').contains(document.activeElement)) this.renderMenu();
+      if (isSaveKey(e.key)) this.reloadSaves();
     });
     $('overlay').addEventListener('click', (e) => {
       if (e.target === $('overlay') && this.dialogKind === 'help') this.closeDialog();
@@ -455,6 +445,36 @@ export class App {
     this.showcase?.renderer.resize();
   }
 
+  /**
+   * Another tab or frame on this origin saved: take its wins too and show them. The menu is
+   * redrawn only when something changed, and the focus stays on the same button.
+   */
+  private reloadSaves(): void {
+    const before = JSON.stringify([this.progress, this.unlockAll, this.siege]);
+    this.progress = mergeProgress(loadProgress(), this.progress);
+    this.unlockAll = loadUnlockAll();
+    const stored = loadSiege(SIEGE.version, SIEGE_CHAPTERS.length);
+    this.siege = {
+      stars: mergeStars(stored.stars, this.siege.stars),
+      checkpoint: stored.checkpoint,
+    };
+    if (JSON.stringify([this.progress, this.unlockAll, this.siege]) === before) return;
+    const toggle = document.querySelector('#dialog [data-role="unlock-all"]');
+    if (toggle) toggle.textContent = this.unlockAll ? this.t.lockAgain : this.t.unlockAll;
+    if ($('menu').hidden) return;
+    // A redrawn button loses the focus: put it back on the button in the same place.
+    const active = document.activeElement;
+    const box =
+      active instanceof HTMLElement && $('menu').contains(active)
+        ? active.parentElement?.closest<HTMLElement>('[id]')
+        : null;
+    const at = box ? [...box.querySelectorAll('button')].indexOf(active as HTMLButtonElement) : -1;
+    this.renderMenu();
+    if (!box || at < 0 || active?.isConnected) return;
+    const buttons = box.querySelectorAll<HTMLElement>('button');
+    buttons[Math.min(at, buttons.length - 1)]?.focus({ preventScroll: true });
+  }
+
   private renderMenu(): void {
     this.renderHero();
     this.renderLevels();
@@ -482,7 +502,7 @@ export class App {
       play.textContent =
         cp && cp.chapter > 0 ? this.t.siege.resume(cp.chapter + 1) : this.t.siege.begin;
       play.addEventListener('click', () =>
-        cp && cp.chapter > 0 ? this.openChapter(cp.chapter) : this.beginSiege(),
+        cp && cp.chapter > 0 ? this.openChapter(cp.chapter, true, cp.carry) : this.beginSiege(),
       );
     }
     const how = h('button', {
@@ -523,7 +543,9 @@ export class App {
       actions.push(b);
     };
     if (cp && cp.chapter > 0) {
-      button(t.resume(cp.chapter + 1), 'btn-primary', () => this.openChapter(cp.chapter));
+      button(t.resume(cp.chapter + 1), 'btn-primary', () =>
+        this.openChapter(cp.chapter, true, cp.carry),
+      );
       button(t.again, 'btn-ghost', () => this.beginSiege());
     } else {
       button(done ? t.again : t.begin, 'btn-primary', () => this.beginSiege());
