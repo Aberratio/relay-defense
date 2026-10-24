@@ -1310,6 +1310,75 @@ kbd {
   line-height: var(--leading-snug);
 }
 
+/* Bestiary: wider than the other dialogs so two cards sit side by side on a laptop. */
+.dialog.dialog-bestiary {
+  width: min(100%, 48rem);
+}
+
+.btn-bestiary .bestiary-count {
+  margin-left: var(--space-2);
+  color: var(--color-text-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  min-width: 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.card .icon {
+  flex: none;
+}
+
+.card-name {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.card p {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.card .card-where {
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+}
+
+/* A card not found yet: the character's silhouette, no name, only where it appears. */
+.card.is-unknown {
+  border-style: dashed;
+}
+
+/* A grey shape: plain black would vanish on the dark card. */
+.card.is-unknown .icon {
+  filter: brightness(0) invert(0.6);
+  opacity: 0.6;
+}
+
+.card.is-unknown .card-name {
+  color: var(--color-text-subtle);
+}
+
 .how {
   display: grid;
   gap: var(--space-2);

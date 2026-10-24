@@ -81,16 +81,25 @@ export function saveUnlockAll(
  * Whether a storage event from another tab or frame touched the saves (null: storage cleared).
  */
 export function isSaveKey(key: string | null): boolean {
-  return key === null || key === KEY || key === UNLOCK_ALL_KEY || key === SIEGE_KEY;
+  return (
+    key === null ||
+    key === KEY ||
+    key === UNLOCK_ALL_KEY ||
+    key === SIEGE_KEY ||
+    key === BESTIARY_KEY
+  );
 }
 
-function safeStorage(): Storage | null {
+export function safeStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
   } catch {
     return null;
   }
 }
+
+/** The characters met so far (src/ui/bestiary.ts); the key lives here with the other saves. */
+export const BESTIARY_KEY = 'relay-defense:bestiary:v1';
 
 // ---- Siege ----------------------------------------------------------------------------------
 
