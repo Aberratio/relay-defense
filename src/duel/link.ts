@@ -158,14 +158,14 @@ function decodeDefence(text: string, map: DuelMapId): Solution | null {
       if (!m) return null;
       const t = m[0];
       rest = rest.slice(t.length);
-      const x = parseInt(t[1]!, 16);
-      const y = parseInt(t[2]!, 16);
+      const x = parseInt(t.charAt(1), 16);
+      const y = parseInt(t.charAt(2), 16);
       if (!isBuildableTile(tileAt(grid, x, y))) return null;
-      const tower = TOWER_OF.get(t[0]!);
+      const tower = TOWER_OF.get(t.charAt(0));
       if (tower) actions.push(['build', tower, x, y]);
       else if (t[0] === 'u') actions.push(['up', x, y]);
       else if (t[0] === 's') actions.push(['sell', x, y]);
-      else actions.push(['mode', x, y, MODE_OF.get(t[3]!) ?? 'first']);
+      else actions.push(['mode', x, y, MODE_OF.get(t.charAt(3)) ?? 'first']);
     }
     waves.push(actions);
   }
@@ -181,12 +181,12 @@ function decodeAttack(text: string): Wave[] | null {
     const groups: SpawnGroup[] = [];
     for (const token of chunk.split(',')) {
       const m = GROUP.exec(token);
-      const enemy = m ? ENEMY_OF.get(m[1]!) : undefined;
+      const enemy = m ? ENEMY_OF.get(m[1] ?? '') : undefined;
       if (!m || !enemy) return null;
       groups.push({
         enemy,
         hp: HP_STEPS[Number(m[2])],
-        gap: GAP_STEPS[Number(m[3])]!,
+        gap: GAP_STEPS[Number(m[3])] ?? Number.NaN,
         delay: DELAY_STEPS[Number(m[4])],
         spawn: Number(m[5]),
         count: Number(m[6]),
