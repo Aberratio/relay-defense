@@ -3,7 +3,9 @@
 // Fails on any page error. Run after `npm run build`: `npm run smoke`.
 import { chromium, type Frame, type Page } from 'playwright';
 import { preview } from 'vite';
+import { LEVELS } from '../src/levels/levels';
 import { SIEGE } from '../src/levels/siege';
+import { SOLUTIONS } from '../tests/solutions';
 
 const server = await preview({ preview: { port: 4719, strictPort: true, host: 'localhost' } });
 const base = 'http://localhost:4719/';
@@ -103,8 +105,20 @@ try {
   if (credits !== '30') fail(`expected 30 credits after building, got ${credits}`);
   await page.locator('#speed').click();
   await page.locator('#speed').click();
+  // Every note over the board, to find the one for the first Goblin after the wave.
+  await page.evaluate(() => {
+    const toast = document.getElementById('toast') as HTMLElement;
+    const seen: string[] = [];
+    (window as unknown as { toasts: string[] }).toasts = seen;
+    new MutationObserver(() => {
+      if (!toast.hidden) seen.push(`${toast.className}: ${toast.textContent}`);
+    }).observe(toast, { attributes: true, childList: true });
+  });
   await page.locator('#start-wave').click();
   await page.locator('#start-wave:not([disabled])').waitFor({ timeout: 60_000 });
+  const toasts = await page.evaluate(() => (window as unknown as { toasts: string[] }).toasts);
+  if (!toasts.includes('toast is-news: New in the bestiary: Goblin.'))
+    fail(`the first Goblin got no bestiary note, notes: ${JSON.stringify(toasts)}`);
   const wave = await page.locator('#stat-wave .stat-value').textContent();
   if (!wave?.startsWith('2')) fail(`expected wave 2 after clearing the first, got ${wave}`);
 
@@ -150,6 +164,63 @@ try {
   const unicorn = await page.locator('.card[data-kind="lance"] .card-link').textContent();
   if (unicorn !== 'Answers: not met yet: 3') fail(`the Unicorn card says "${unicorn}"`);
   await page.keyboard.press('Escape');
+  await page.evaluate(() => localStorage.clear());
+
+  // Result: a level's dialog says what the win changed. A first win of level 3 opens level 4 and
+  // counts the defender waiting there (not met yet, so not named); the cards found on the way are
+  // listed. A replay of level 1 that beats its saved stars is a record.
+  const win = async (id: string) => {
+    const level = LEVELS.find((l) => l.id === id) ?? fail(`no level ${id}`);
+    const solution = SOLUTIONS.find((sol) => sol.level === id) ?? fail(`no solution for ${id}`);
+    await page.goto(`${base}?lang=en&level=${id}`);
+    await page.locator('.dialog .btn-primary').click();
+    await page.locator('#speed').click();
+    await page.locator('#speed').click();
+    const board = (await page.locator('#board').boundingBox()) ?? fail('no board');
+    const at = (x: number, y: number) =>
+      page.mouse.click(
+        board.x + ((x + 0.5) * board.width) / 16,
+        board.y + ((y + 0.5) * board.width) / 16,
+      );
+    for (let w = 0; w < level.waves.length; w++) {
+      for (const action of solution.waves[w] ?? []) {
+        if (action[0] === 'build') {
+          await page.keyboard.press(String(level.towers.indexOf(action[1]) + 1));
+          await at(action[2], action[3]);
+        } else if (action[0] === 'up') {
+          await at(action[1], action[2]);
+          await page.keyboard.press('u');
+        } else fail(`the smoke test cannot play "${action[0]}"`);
+        await page.keyboard.press('Escape');
+      }
+      await page.locator('#start-wave').click();
+      await page
+        .locator('#start-wave:not([disabled]), .dialog-result')
+        .first()
+        .waitFor({ timeout: 120_000 });
+    }
+    await page.locator('.dialog-result').waitFor({ timeout: 10_000 });
+    return page.locator('.dialog-result .result-news li').allTextContents();
+  };
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'relay-defense:progress:v1',
+      JSON.stringify({ handshake: 3, 'fan-out': 3 }),
+    ),
+  );
+  const opened = await win('bulwark');
+  const expected = [
+    'Now open: 4. Open Meadow. Waiting there: a new defender.',
+    'New in the bestiary: Unicorn and Troll.',
+  ];
+  if (JSON.stringify(opened) !== JSON.stringify(expected))
+    fail(`level 3 result says ${JSON.stringify(opened)}`);
+  await page.evaluate(() =>
+    localStorage.setItem('relay-defense:progress:v1', JSON.stringify({ handshake: 1 })),
+  );
+  const record = await win('handshake');
+  if (JSON.stringify(record) !== JSON.stringify(['New best: 3 of 3 stars, up from 1.']))
+    fail(`level 1 replay result says ${JSON.stringify(record)}`);
   await page.evaluate(() => localStorage.clear());
 
   // Siege: the card under the levels opens the first chapter.

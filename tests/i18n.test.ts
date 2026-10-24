@@ -66,3 +66,33 @@ describe('Polish plurals', () => {
     expect(a.waveClear(1, 3)).toBe('Fala 1 odparta. Premia: 3 monety.');
   });
 });
+
+describe('result news', () => {
+  it('counts new characters and lists names in each language', () => {
+    const en = strings('en').news;
+    const pl = strings('pl').news;
+    expect([1, 2, 5].map(en.newDefenders)).toEqual([
+      'a new defender',
+      '2 new defenders',
+      '5 new defenders',
+    ]);
+    expect([1, 2, 5].map(en.newMonsters)).toEqual([
+      'a new monster',
+      '2 new monsters',
+      '5 new monsters',
+    ]);
+    // Polish text stays in i18n.ts (check:language), so the forms are compared, not spelled out:
+    // a defender takes the genitive plural from 2 on, a monster the nominative plural for 2-4.
+    expect(pl.newDefenders(2)).toBe(pl.newDefenders(5).replace('5', '2'));
+    expect(pl.newMonsters(2)).not.toBe(pl.newMonsters(5).replace('5', '2'));
+    expect(pl.newMonsters(22)).toBe(pl.newMonsters(2).replace('2', '22'));
+    expect(en.opened('6. The Brood', ['2 new defenders', 'a new monster'])).toBe(
+      'Now open: 6. The Brood. Waiting there: 2 new defenders and a new monster.',
+    );
+    expect(pl.opened('7. Dwa fronty', [])).toBe('Odblokowany poziom: 7. Dwa fronty.');
+    expect(strings('pl').bestiary.found(['Troll'])).toBe('Nowa karta w bestiariuszu: Troll.');
+    expect(strings('en').bestiary.found(['Unicorn', 'Troll'])).toBe(
+      'New in the bestiary: Unicorn and Troll.',
+    );
+  });
+});
