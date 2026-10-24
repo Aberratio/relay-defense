@@ -1023,6 +1023,16 @@ export class App {
       (TOWER_KINDS as readonly string[]).includes(k)
         ? this.t.towers[k as TowerKind].name
         : this.t.enemies[k as EnemyKind].name;
+    const b = this.bestiary;
+    // A card names only the characters already met; the others are only counted, so the bestiary
+    // gives nothing away before the board does.
+    const linkText = (links: readonly (TowerKind | EnemyKind)[]): string => {
+      const met = links.filter(
+        (k) => b.towers.includes(k as TowerKind) || b.enemies.includes(k as EnemyKind),
+      );
+      const hidden = links.length - met.length;
+      return [...met.map(name), ...(hidden ? [t.notMet(hidden)] : [])].join(', ');
+    };
     const card = (
       kind: TowerKind | EnemyKind,
       found: boolean,
@@ -1043,7 +1053,7 @@ export class App {
               ? [
                   h('p', { class: 'card-link' }, [
                     h('strong', { text: `${linkLabel}: ` }),
-                    links.map(name).join(', '),
+                    linkText(links),
                   ]),
                 ]
               : []),
@@ -1058,7 +1068,6 @@ export class App {
         h('div', {}, lines),
       ]);
     };
-    const b = this.bestiary;
     const found = b.towers.length + b.enemies.length;
     const total = TOWER_KINDS.length + ENEMY_KINDS.length;
     this.showDialog(

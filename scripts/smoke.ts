@@ -139,6 +139,15 @@ try {
   await page.reload();
   if ((await book.getAttribute('aria-label')) !== 'Bestiary, 2 of 14 cards found')
     fail('cards of levels won before the bestiary are not open');
+  // A found card names only characters already met: the Unicorn answers three monsters, none met.
+  await page.evaluate(() =>
+    localStorage.setItem('relay-defense:bestiary:v1', JSON.stringify({ towers: ['lance'] })),
+  );
+  await page.reload();
+  await book.click();
+  const unicorn = await page.locator('.card[data-kind="lance"] .card-link').textContent();
+  if (unicorn !== 'Answers: not met yet: 3') fail(`the Unicorn card says "${unicorn}"`);
+  await page.keyboard.press('Escape');
   await page.evaluate(() => localStorage.clear());
 
   // Siege: the card under the levels opens the first chapter.

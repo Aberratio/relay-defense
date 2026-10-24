@@ -1347,7 +1347,9 @@ kbd {
 }
 
 .card-name {
+  margin: 0;
   font-size: var(--text-sm);
+  line-height: var(--leading-snug);
 }
 
 .card p {
