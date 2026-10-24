@@ -38,8 +38,10 @@ button {
   color: inherit;
 }
 
+/* The transparent outline is drawn in the system colour when forced colours drop the shadow. */
 :focus-visible {
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   box-shadow: var(--focus-ring);
 }
 
@@ -177,9 +179,13 @@ kbd {
   letter-spacing: var(--tracking-heading);
 }
 
+/* The in-level h1: the menu has its own, so this one is hidden there. */
 .level-name {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: normal;
 }
 
 .spacer {
@@ -1377,10 +1383,20 @@ kbd {
     gap: var(--space-2);
   }
 
-  .level-name,
   .brand-title,
   .btn-label {
     display: none;
+  }
+
+  /* Out of sight but still the page's h1 for assistive technology. Like .visually-hidden, but
+     without its -1px margin, which would pull the top bar's flex row. */
+  .level-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .controls .btn {

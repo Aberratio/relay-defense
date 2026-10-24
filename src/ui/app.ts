@@ -430,6 +430,7 @@ export class App {
   // ---- Screens ---------------------------------------------------------------------------
 
   private showMenu(): void {
+    const fromGame = this.game !== null;
     this.closeDialog();
     window.clearTimeout(this.resultTimer);
     this.game = null;
@@ -439,10 +440,19 @@ export class App {
     $('stats').hidden = true;
     $('controls').hidden = true;
     $('level-name').textContent = '';
+    $('level-name').hidden = true;
     this.menuHint = null;
     this.setUpShowcase();
     this.renderMenu();
     this.showcase?.renderer.resize();
+    // Leaving a level from its result, the focus was on the board or the dialog, both hidden now:
+    // keyboard players go on from the call to action, not from the top of an unfocused page.
+    const active = document.activeElement;
+    if (fromGame && (!active || active === document.body || active.closest('[hidden]'))) {
+      document
+        .querySelector<HTMLElement>('#menu [data-role="play"]')
+        ?.focus({ preventScroll: this.opts.embed });
+    }
   }
 
   /**
@@ -609,9 +619,11 @@ export class App {
         const open = isUnlocked(i, ids, this.progress, this.unlockAll);
         const state = !open ? 'is-locked' : i === next ? 'is-next' : won ? 'is-won' : 'is-open';
         const status = !open ? this.t.locked : won ? this.t.starsLabel(stars) : this.t.notPlayed;
+        const num = String(i + 1).padStart(2, '0');
+        // The name starts with the visible text, so speech input can press it by what it shows.
         const attrs: Record<string, string> = {
           type: 'button',
-          'aria-label': `${this.t.level} ${i + 1}: ${name}, ${status}`,
+          'aria-label': `${num} ${name}, ${status}`,
         };
         if (!open) attrs['aria-disabled'] = 'true';
         if (i === next) attrs['aria-current'] = 'step';
@@ -620,7 +632,7 @@ export class App {
             this.spriteIcon(64, levelSprite(i)),
             ...(open ? [] : [lockIcon()]),
           ]),
-          h('span', { class: 'level-num', text: String(i + 1).padStart(2, '0') }),
+          h('span', { class: 'level-num', text: num }),
           h('span', { class: 'node-name', text: name }),
           open ? this.starsEl(stars, status) : h('span', { class: 'stars-placeholder' }),
         ]);
@@ -729,6 +741,7 @@ export class App {
     $('stats').hidden = false;
     $('controls').hidden = false;
     $('level-name').textContent = this.title();
+    $('level-name').hidden = false;
     this.renderer.resize();
     this.renderPalette();
     this.renderInfo();
@@ -1604,7 +1617,12 @@ export class App {
     }, 1100);
   }
 
+  /**
+   * A short visual note over the board. The announcer speaks it: a live region filled while it is
+   * still hidden is skipped by many screen readers.
+   */
   private toast(text: string): void {
+    this.announce(text);
     const el = $('toast');
     el.textContent = text;
     el.hidden = false;
@@ -1699,6 +1717,10 @@ export class App {
     const target = e.target as HTMLElement | null;
     const onButton = target?.tagName === 'BUTTON' || target?.tagName === 'A';
     const key = e.key.toLowerCase();
+    // Character shortcuts act only while the focus is in the game (the board, its panels, its
+    // controls) or nowhere, not on home, help or the language switch (WCAG 2.1.4).
+    const inGame = !target || target === document.body || !!target.closest('#game, #controls');
+    if (!inGame && key !== 'escape') return;
     if (/^[1-9]$/.test(e.key)) {
       const kind = game.level.towers[Number(e.key) - 1];
       if (kind) this.pickKind(kind);

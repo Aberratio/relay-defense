@@ -19,7 +19,7 @@
           <img src="/src/assets/brand/mark.svg" alt="" width="22" height="22" />
           <span class="brand-title">Heartwood</span>
         </button>
-        <span class="level-name" id="level-name"></span>
+        <h1 class="level-name" id="level-name" hidden></h1>
         <span class="spacer"></span>
         <div class="stats" id="stats" hidden>
           <span class="stat stat-lives" id="stat-lives"
@@ -71,7 +71,7 @@
       <main class="screen screen-game" id="game" hidden>
         <div class="board-wrap" id="board-wrap">
           <canvas class="board" id="board" tabindex="0" role="application"></canvas>
-          <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+          <div class="toast" id="toast" hidden></div>
           <div class="paused-badge" id="paused-badge" hidden></div>
         </div>
         <aside class="side" id="side">
