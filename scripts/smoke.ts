@@ -504,8 +504,89 @@ try {
   if (copied.status !== 'Link copied.' && copied.focus !== 'duel-link')
     fail(`copying the link said "${copied.status}" and left the focus on ${copied.focus}`);
 
+  // Rival: open the challenge, compose waves (the budget holds them back), watch them attack the
+  // Archer, then build a defence in the sparring run and send the answer.
+  const rival = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  rival.on('pageerror', (e) => errors.push(e.message));
+  await rival.goto(link);
+  const challenged = await rival.locator('.dialog h2').textContent();
+  if (challenged !== 'You are challenged') fail(`a challenge link opened "${challenged}"`);
+  await rival.locator('.dialog .btn-primary').click();
+  const gold = () => rival.locator('#editor .duel-gold').textContent();
+  if ((await gold()) !== '14 of 560 gold left') fail(`a fresh draft says "${await gold()}"`);
+  // Twelve Ogre Warlords instead of twelve Wraiths: 480 gold where 42 was.
+  await rival.locator('[data-key="0-0-enemy"]').selectOption('colossus');
+  if ((await gold()) !== '424 gold over the budget') fail(`over budget says "${await gold()}"`);
+  if (!(await rival.locator('#editor [data-key="next"]').isDisabled()))
+    fail('waves over the budget can still be sent');
+  await rival.locator('[data-key="0-0-max"]').click();
+  if ((await gold()) !== '16 of 560 gold left') fail(`after Max it says "${await gold()}"`);
+  const editorWide = await rival.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  if (editorWide > 0) fail(`the wave editor scrolls sideways by ${editorWide} px at 360 px`);
+  // A count typed and a button clicked straight away: the click must not be lost to the field.
+  await rival.locator('[data-key="0-1-count"]').fill('25');
+  if ((await gold()) !== '8 of 560 gold left') fail(`after typing 25 Goblins: "${await gold()}"`);
+  await rival.locator('#editor [data-key="watch"]').click();
+  await rival.locator('#speed').click();
+  await rival.locator('#speed').click();
+  await rival.locator('.dialog-result h2').waitFor({ timeout: 120_000 });
+  const took = await rival.locator('.dialog-result h2').textContent();
+  if (!/^Your waves took \d+ lives from their Heart Tree\.$/.test(took ?? ''))
+    fail(`watching the waves ended with "${took}"`);
+  await rival.locator('.dialog .btn-primary').click();
+  await rival.locator('#editor [data-key="next"]').click();
+  await rival.locator('.dialog .btn-primary').click();
+  await rival.locator('#start-wave').click();
+  await rival.locator('.dialog .duel-link').waitFor({ timeout: 120_000 });
+  if ((await rival.locator('.dialog h2').textContent()) !== 'Your answer is ready')
+    fail('the rival got no answer to send');
+  const answer = await rival.locator('.dialog .duel-link').inputValue();
+  if (!answer.includes('#duel=1~1~s~p33...~c')) fail(`the answer link is ${answer}`);
+
+  // Challenger: open the answer, send waves back and see who won; the last link shows it too.
+  const returned = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  returned.on('pageerror', (e) => errors.push(e.message));
+  await returned.goto(answer);
+  if ((await returned.locator('.dialog h2').textContent()) !== 'Your rival answered')
+    fail('the answer link did not open as an answer');
+  await returned.locator('.dialog .btn-primary').click();
+  await returned.locator('#editor [data-key="next"]').click();
+  if ((await returned.locator('.dialog h2').textContent()) !== 'The duel is complete')
+    fail('sending the waves did not complete the duel');
+  const result = await returned.locator('.dialog .duel-link').inputValue();
+  await returned.locator('.dialog .btn-ghost').click();
+  const winner = await returned.locator('.dialog h2').textContent();
+  if (!['The challenger wins', 'The rival wins', 'A draw'].includes(winner ?? ''))
+    fail(`the duel result says "${winner}"`);
+  const direct = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  direct.on('pageerror', (e) => errors.push(e.message));
+  await direct.goto(result);
+  if ((await direct.locator('.dialog h2').textContent()) !== winner)
+    fail('the result link shows another result');
+  // The editor in a narrow kokot.it frame: adding a group must not change the frame's height.
+  const framed = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  framed.on('pageerror', (e) => errors.push(e.message));
+  await host(framed);
+  const editorFrame = await mount(framed, 326, `${base}?embed=1&lang=en${new URL(link).hash}`);
+  await editorFrame.locator('.dialog .btn-primary').click();
+  await settle(editorFrame);
+  const before = await frameHeight(framed);
+  await editorFrame.locator('#editor [data-key="0-add"]').click();
+  await settle(editorFrame);
+  const after = await frameHeight(framed);
+  if (after !== before) fail(`adding a group resized the frame from ${before} to ${after} px`);
+  await direct.goto(`${base}?lang=en#duel=1~1~constructor~`);
+  await direct.reload();
+  if (
+    (await direct.locator('.dialog .dialog-lead').textContent()) !==
+    'This duel link is broken or incomplete.'
+  )
+    fail('a broken duel link was not refused');
+
   console.info(
-    `Smoke test passed: unlock path checked, level played, Siege opened, accessibility checks, embed height ${height}px, narrow embed fits, dialogs fit the frame, duel challenge link made.`,
+    `Smoke test passed: unlock path checked, level played, Siege opened, accessibility checks, embed height ${height}px, narrow embed fits, dialogs fit the frame, a whole duel played through its three links.`,
   );
 } finally {
   await browser.close();

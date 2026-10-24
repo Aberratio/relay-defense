@@ -1,10 +1,13 @@
 // The application: menu, briefing, play screen, results and help. Owns the game loop (fixed 30 Hz
 // simulation, rendering every animation frame) and all input: mouse, touch and keyboard.
+import { addGroup, fillGroup, goldLeft, newDraft, removeGroup, setField } from '../duel/editor';
+import type { GroupField } from '../duel/editor';
+import { duelFromHash, type DecodeResult, type Duel } from '../duel/link';
 import { Recorder } from '../duel/recorder';
 import { duelUrl } from '../duel/share';
 import { Game, type GameEvent } from '../engine/game';
 import { tileAt } from '../engine/grid';
-import { apply, type Action } from '../engine/replay';
+import { apply, type Action, type Solution } from '../engine/replay';
 import { DT, ENEMIES, FOG_RANGE, TOWERS, type TowerLevel } from '../engine/stats';
 import {
   ENEMY_KINDS,
@@ -16,8 +19,23 @@ import {
   type LevelDef,
   type PlaceError,
   type TowerKind,
+  type Wave,
 } from '../engine/types';
-import { DUEL_MAP_IDS, duelLevelId, sparringLevel, type DuelMapId } from '../levels/duel';
+import {
+  DELAY_STEPS,
+  DUEL_MAP_IDS,
+  GAP_STEPS,
+  HP_STEPS,
+  MAX_GROUPS,
+  SCORE_POOL,
+  duelLevel,
+  duelLevelId,
+  groupCost,
+  rematch,
+  sparringLevel,
+  validateAttack,
+  type DuelMapId,
+} from '../levels/duel';
 import { LEVELS } from '../levels/levels';
 import { EMPTY_CARRY, SIEGE, SIEGE_CHAPTERS } from '../levels/siege';
 import { BoardRenderer, type BoardView } from '../render/board';
@@ -221,6 +239,14 @@ export class App {
   private carried = new Set<number>();
   /** The duel sparring being played, or null: its moves are written down as the defence. */
   private sparring: { map: DuelMapId; recorder: Recorder } | null = null;
+  /** The duel link being answered, and whose turn it is. */
+  private duelLink: { duel: Duel; role: 'rival' | 'challenger' } | null = null;
+  /** The rival's waves, kept while they build their own defence in the sparring run. */
+  private answer: Wave[] | null = null;
+  /** The waves being composed; the editor is open while this is set. */
+  private draft: Wave[] | null = null;
+  /** Waves being watched against a defence script, which plays its moves by itself. */
+  private watch: { waves: Wave[]; defence: Solution; skipped: number } | null = null;
   private selectedKind: TowerKind | null = null;
   private selectedTower: number | null = null;
   private info: Info = null;
@@ -341,7 +367,11 @@ export class App {
     const start = this.opts.startLevel
       ? LEVELS.findIndex((l) => l.id === this.opts.startLevel)
       : -1;
-    if (start >= 0) this.openLevel(start);
+    const link = duelFromHash(location.hash);
+    if (link) {
+      this.showMenu();
+      this.openDuelLink(link);
+    } else if (start >= 0) this.openLevel(start);
     else if (this.opts.startSiege) this.openChapter(this.siege.checkpoint?.chapter ?? 0);
     else if (this.opts.startDuel) {
       this.showMenu();
@@ -370,6 +400,13 @@ export class App {
     }
     window.addEventListener('storage', (e) => {
       if (isSaveKey(e.key)) this.reloadSaves();
+    });
+    // A duel link pasted into a tab that already has the game open.
+    window.addEventListener('hashchange', () => {
+      const link = duelFromHash(location.hash);
+      if (!link) return;
+      this.showMenu();
+      this.openDuelLink(link);
     });
     $('overlay').addEventListener('click', (e) => {
       const light = this.dialogKind === 'help' || this.dialogKind === 'bestiary';
@@ -457,6 +494,8 @@ export class App {
   /** The heading of what is being played: a level or a Siege chapter. */
   private title(): string {
     if (this.sparring) return this.t.duel.sparTitle(this.t.duel.maps[this.sparring.map]);
+    if (this.duelLink && (this.draft || this.watch))
+      return this.t.duel.composeTitle(this.t.duel.maps[this.duelLink.duel.map]);
     if (this.chapter === null) return this.levelTitle(this.levelIndex);
     return `${this.t.siege.short(this.chapter + 1)}. ${this.chapterCopy(this.chapter).name}`;
   }
@@ -478,7 +517,7 @@ export class App {
     window.clearTimeout(this.resultTimer);
     this.game = null;
     this.chapter = null;
-    this.sparring = null;
+    this.leaveDuel();
     $('menu').hidden = false;
     $('game').hidden = true;
     $('stats').hidden = true;
@@ -658,7 +697,9 @@ export class App {
   }
 
   private restart(): void {
-    if (this.sparring) this.openSparring(this.sparring.map, false);
+    if (this.watch) this.watchWaves(this.watch.waves);
+    else if (this.draft !== null) return;
+    else if (this.sparring) this.openSparring(this.sparring.map, false);
     else if (this.chapter !== null) this.openChapter(this.chapter, false, this.chapterStart);
     else this.openLevel(this.levelIndex, false);
   }
@@ -763,7 +804,7 @@ export class App {
     if (!level) return;
     this.levelIndex = index;
     this.chapter = null;
-    this.sparring = null;
+    this.leaveDuel();
     this.carried.clear();
     this.topUp = 0;
     this.enter(new Game(level), brief);
@@ -782,7 +823,7 @@ export class App {
     const carry = fitting(level, wanted);
     const game = Game.resume(level, carry);
     this.chapter = index;
-    this.sparring = null;
+    this.leaveDuel();
     this.chapterStart = carry;
     this.carried = new Set(game.towers.map((t) => t.id));
     this.topUp = index > 0 ? Math.max(0, game.credits - Math.floor(carry.credits)) : 0;
@@ -816,11 +857,19 @@ export class App {
     $('controls').hidden = false;
     $('level-name').textContent = this.title();
     $('level-name').hidden = false;
+    // Composing or watching waves, nothing is built: the editor takes the place of the palette.
+    $('game').classList.toggle('is-editing', this.draft !== null);
+    $('game').classList.toggle('is-watching', this.watch !== null);
+    $('editor').hidden = this.draft === null;
+    // The editor's board stands still, and the gold on it is the rival's, not the attacker's.
+    $('controls').hidden = this.draft !== null;
+    $('stat-credits').hidden = this.draft !== null;
     this.renderer.resize();
     this.renderPalette();
     this.renderInfo();
     this.renderWaves();
     this.renderControls();
+    this.renderEditor();
     this.refreshHud();
     if (brief) this.openBrief();
     else this.canvas.focus({ preventScroll: true });
@@ -986,7 +1035,10 @@ export class App {
         text: t.maps[map],
         attrs: { type: 'button', 'data-map': map },
       });
-      b.addEventListener('click', () => this.openSparring(map));
+      b.addEventListener('click', () => {
+        this.leaveDuel();
+        this.openSparring(map);
+      });
       return b;
     });
     this.showDialog(
@@ -1002,11 +1054,25 @@ export class App {
     );
   }
 
-  /** The sparring run of a map; every move in it is written down as the player's defence. */
+  /** Out of every duel screen; a duel keeps nothing once left. */
+  private leaveDuel(): void {
+    this.sparring = null;
+    this.duelLink = null;
+    this.answer = null;
+    this.draft = null;
+    this.watch = null;
+  }
+
+  /**
+   * The sparring run of a map; every move in it is written down as the player's defence. A rival
+   * answering a challenge keeps the link and their waves through it.
+   */
   private openSparring(map: DuelMapId, brief = true): void {
     this.chapter = null;
     this.carried.clear();
     this.topUp = 0;
+    this.draft = null;
+    this.watch = null;
     this.sparring = { map, recorder: new Recorder() };
     this.enter(new Game(sparringLevel(map)), brief);
   }
@@ -1032,11 +1098,19 @@ export class App {
     );
   }
 
-  /** After the sparring run: the defence as a challenge link to send. */
-  private openDuelShare(game: Game, sparring: { map: DuelMapId; recorder: Recorder }): void {
+  private duelButton(text: string, cls: string, run: () => void): HTMLButtonElement {
+    const b = h('button', { class: `btn ${cls}`, text, attrs: { type: 'button' } });
+    b.addEventListener('click', run);
+    return b;
+  }
+
+  /**
+   * A duel link to pass on: the whole address in a read-only field, and a Copy button. Inside a
+   * frame the clipboard can be off limits; the field then takes the focus to be copied by hand.
+   */
+  private linkBlock(duel: Duel): { nodes: HTMLElement[]; copy: HTMLButtonElement } {
     const t = this.t.duel;
-    const defence = sparring.recorder.solution(duelLevelId(sparring.map));
-    const url = duelUrl(location, this.lang, { map: sparring.map, challenger: defence });
+    const url = duelUrl(location, this.lang, duel);
     const field = h('input', {
       class: 'duel-link',
       attrs: { type: 'text', readonly: '', id: 'duel-link', value: url },
@@ -1044,48 +1118,444 @@ export class App {
     field.value = url;
     field.addEventListener('focus', () => field.select());
     const status = h('p', { class: 'dialog-note', attrs: { role: 'status' } });
-    const copy = h('button', { class: 'btn btn-primary', text: t.copy, attrs: { type: 'button' } });
-    copy.addEventListener('click', () => {
+    const copy = this.duelButton(t.copy, 'btn-primary', () => {
       const failed = () => {
         field.focus();
         field.select();
         status.textContent = t.copyFailed;
       };
-      // Inside a frame the clipboard can be off limits; the field stays there to copy by hand.
       if (!navigator.clipboard) return failed();
       navigator.clipboard.writeText(url).then(() => (status.textContent = t.copied), failed);
     });
-    const again = h('button', {
-      class: 'btn btn-ghost',
-      text: t.sparAgain,
-      attrs: { type: 'button' },
-    });
-    again.addEventListener('click', () => this.openSparring(sparring.map, false));
-    const back = h('button', {
-      class: 'btn btn-ghost',
-      text: this.t.backToLevels,
-      attrs: { type: 'button' },
-    });
-    back.addEventListener('click', () => this.showMenu());
+    return {
+      nodes: [
+        h('label', { class: 'info-label', text: t.linkLabel, attrs: { for: 'duel-link' } }),
+        field,
+        status,
+      ],
+      copy,
+    };
+  }
+
+  /**
+   * After the sparring run: the defence as a link. A challenger sends a new challenge; a rival
+   * answering one sends their waves and this defence back.
+   */
+  private openDuelShare(game: Game, sparring: { map: DuelMapId; recorder: Recorder }): void {
+    const t = this.t.duel;
+    const defence = sparring.recorder.solution(duelLevelId(sparring.map));
+    const link = this.duelLink;
+    const answering = link?.role === 'rival' && this.answer !== null;
+    const duel: Duel =
+      link && answering && this.answer
+        ? { ...link.duel, rival: { attack: this.answer, defence } }
+        : { map: sparring.map, challenger: defence };
+    const { nodes, copy } = this.linkBlock(duel);
+    const again = this.duelButton(t.sparAgain, 'btn-ghost', () =>
+      this.openSparring(sparring.map, false),
+    );
+    const back = this.duelButton(this.t.backToLevels, 'btn-ghost', () => this.showMenu());
     const held = game.phase === 'won';
     this.showDialog(
       'result',
       [
         h('p', { class: 'dialog-eyebrow', text: t.sparEyebrow }),
-        h('h2', { text: t.shareTitle, attrs: { id: 'dialog-title' } }),
+        h('h2', {
+          text: answering ? t.answerTitle : t.shareTitle,
+          attrs: { id: 'dialog-title' },
+        }),
         h('p', {
           class: 'dialog-lead',
           text: held ? t.held(game.lives, game.maxLives) : t.broken,
         }),
-        h('p', { text: t.shareLead }),
-        h('label', { class: 'info-label', text: t.linkLabel, attrs: { for: 'duel-link' } }),
-        field,
-        status,
+        h('p', { text: answering ? t.answerLead : t.shareLead }),
+        ...nodes,
         h('div', { class: 'dialog-actions' }, [copy, again, back]),
       ],
       copy,
     );
     $('dialog').classList.add(held ? 'is-won' : 'is-lost');
+  }
+
+  /** An incoming `#duel=` link: say what is wrong with it, or open the next turn of the duel. */
+  private openDuelLink(result: DecodeResult): void {
+    const t = this.t.duel;
+    if (!result.ok) {
+      const back = this.duelButton(this.t.backToLevels, 'btn-primary', () => this.closeDialog());
+      this.showDialog(
+        'brief',
+        [
+          h('p', { class: 'dialog-eyebrow', text: t.title }),
+          h('h2', { text: t.linkTitle, attrs: { id: 'dialog-title' } }),
+          h('p', {
+            class: 'dialog-lead',
+            text: result.reason === 'version' ? t.oldLink : t.badLink,
+          }),
+          h('div', { class: 'dialog-actions' }, [back]),
+        ],
+        back,
+      );
+      return;
+    }
+    const duel = result.duel;
+    this.leaveDuel();
+    if (duel.rival && duel.reply) {
+      this.openDuelResult(duel);
+      return;
+    }
+    this.duelLink = { duel, role: duel.rival ? 'challenger' : 'rival' };
+    const rival = this.duelLink.role === 'rival';
+    const go = this.duelButton(t.compose, 'btn-primary', () => this.openEditor(newDraft()));
+    this.showDialog(
+      'brief',
+      [
+        h('p', { class: 'dialog-eyebrow', text: `${t.title} · ${t.maps[duel.map]}` }),
+        h('h2', { text: rival ? t.challenged : t.answered, attrs: { id: 'dialog-title' } }),
+        h('p', { class: 'dialog-lead', text: rival ? t.challengedLead : t.answeredLead }),
+        h('p', { class: 'dialog-note', text: t.rules }),
+        h('div', { class: 'dialog-actions' }, [go]),
+      ],
+      go,
+    );
+  }
+
+  /** The defence the waves being composed will meet. */
+  private target(): Solution | null {
+    const link = this.duelLink;
+    if (!link) return null;
+    return link.role === 'rival' ? link.duel.challenger : (link.duel.rival?.defence ?? null);
+  }
+
+  /**
+   * The editor's board: the draft waves against the rival's defence as it stands before the first
+   * wave. Nothing runs on it; "Watch them attack" plays the whole thing.
+   */
+  private previewGame(map: DuelMapId, draft: Wave[]): Game {
+    const game = new Game(duelLevel(map, draft, SCORE_POOL));
+    for (const action of this.target()?.waves[0] ?? []) apply(game, action);
+    game.drainEvents();
+    return game;
+  }
+
+  private openEditor(draft: Wave[]): void {
+    const link = this.duelLink;
+    if (!link) return;
+    this.chapter = null;
+    this.sparring = null;
+    this.watch = null;
+    this.draft = draft;
+    this.enter(this.previewGame(link.duel.map, draft), false);
+  }
+
+  /**
+   * One edit of the draft: the board and the wave list follow it. The editor is rebuilt unless the
+   * edit came from typing a count, which only refreshes the numbers: rebuilding under a click
+   * that blurs the field would swallow the click.
+   */
+  private editDraft(next: Wave[], focus?: string, rebuild = true): void {
+    const link = this.duelLink;
+    if (!link || this.draft === null) return;
+    this.draft = next;
+    const game = this.previewGame(link.duel.map, next);
+    this.game = game;
+    this.renderer.setGame(game);
+    this.hud = { lives: -1, credits: -1, wave: '' };
+    this.renderWaves();
+    this.refreshHud();
+    if (rebuild) this.renderEditor(focus);
+    else this.refreshEditor();
+  }
+
+  /** The editor's numbers after a typed count: group costs, the gold left and the buttons. */
+  private refreshEditor(): void {
+    const draft = this.draft;
+    if (draft === null) return;
+    const t = this.t.duel;
+    const panel = $('editor');
+    draft.forEach((wave, w) =>
+      wave.groups.forEach((g, i) => {
+        const cost = panel.querySelector<HTMLElement>(`[data-key="${w}-${i}-cost"]`);
+        if (cost) cost.textContent = t.cost(groupCost(g));
+      }),
+    );
+    const left = goldLeft(draft);
+    const gold = panel.querySelector<HTMLElement>('.duel-gold');
+    if (gold) {
+      gold.textContent = left < 0 ? t.overBudget(-left) : t.goldLeft(left);
+      gold.classList.toggle('is-over', left < 0);
+    }
+    const valid = validateAttack(draft) === null;
+    for (const key of ['watch', 'next'])
+      panel
+        .querySelector<HTMLButtonElement>(`[data-key="${key}"]`)
+        ?.toggleAttribute('disabled', !valid);
+  }
+
+  /**
+   * The wave editor in the side panel: four waves of one to four groups, and the gold left. The
+   * element that had the focus gets it back, or `focus` when it is gone (a removed group).
+   */
+  private renderEditor(focus?: string): void {
+    const panel = $('editor');
+    const link = this.duelLink;
+    if (this.draft === null || !link) {
+      panel.replaceChildren();
+      return;
+    }
+    const draft = this.draft;
+    // Every handler edits the draft as it is when it fires, not as it was when this was drawn.
+    const now = (): Wave[] => this.draft ?? draft;
+    const t = this.t.duel;
+    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const keep = focus ?? (focused?.closest('#editor') ? focused.dataset.key : undefined);
+    const select = (
+      key: string,
+      label: string,
+      value: number | string,
+      options: [number | string, string][],
+      set: (v: string) => void,
+    ) => {
+      const s = h(
+        'select',
+        { attrs: { 'data-key': key } },
+        options.map(([v, text]) => {
+          const o = h('option', { text, attrs: { value: String(v) } });
+          o.selected = String(v) === String(value);
+          return o;
+        }),
+      );
+      s.addEventListener('change', () => set(s.value));
+      return h('label', { class: 'duel-field' }, [h('span', { text: label }), s]);
+    };
+    const waves = draft.map((wave, w) => {
+      const groups = wave.groups.map((g, i) => {
+        const field = (f: GroupField) => (v: string) =>
+          this.editDraft(setField(now(), w, i, f, f === 'enemy' ? (v as EnemyKind) : Number(v)));
+        const count = h('input', {
+          attrs: {
+            type: 'number',
+            min: '1',
+            max: '500',
+            step: '1',
+            inputmode: 'numeric',
+            'data-key': `${w}-${i}-count`,
+            value: String(g.count),
+          },
+        });
+        count.value = String(g.count);
+        count.addEventListener('input', () => {
+          if (count.value !== '')
+            this.editDraft(setField(now(), w, i, 'count', Number(count.value)), undefined, false);
+        });
+        // On leaving the field it shows the count the draft kept (whole, 1 to 500).
+        count.addEventListener('change', () => {
+          count.value = String(now()[w]?.groups[i]?.count ?? 1);
+        });
+        const max = this.duelButton(t.max, 'btn-ghost btn-small', () =>
+          this.editDraft(fillGroup(now(), w, i)),
+        );
+        max.dataset.key = `${w}-${i}-max`;
+        const parts: HTMLElement[] = [
+          select(
+            `${w}-${i}-enemy`,
+            t.monster,
+            g.enemy,
+            ENEMY_KINDS.map((k) => [k, this.t.enemies[k].name]),
+            field('enemy'),
+          ),
+          h('label', { class: 'duel-field' }, [
+            h('span', { text: t.count }),
+            h('span', { class: 'duel-count' }, [count, max]),
+          ]),
+          select(
+            `${w}-${i}-hp`,
+            t.strength,
+            g.hp ?? 1,
+            HP_STEPS.map((x) => [x, t.times(x)]),
+            field('hp'),
+          ),
+          select(
+            `${w}-${i}-gap`,
+            t.gap,
+            g.gap,
+            GAP_STEPS.map((s) => [s, t.seconds(s)]),
+            field('gap'),
+          ),
+          select(
+            `${w}-${i}-delay`,
+            t.delay,
+            g.delay ?? 0,
+            DELAY_STEPS.map((s) => [s, t.seconds(s)]),
+            field('delay'),
+          ),
+          select(
+            `${w}-${i}-spawn`,
+            t.portal,
+            g.spawn ?? 0,
+            [
+              [0, t.portalN(1)],
+              [1, t.portalN(2)],
+            ],
+            field('spawn'),
+          ),
+        ];
+        const foot: HTMLElement[] = [
+          h('span', {
+            class: 'duel-cost',
+            text: t.cost(groupCost(g)),
+            attrs: { 'data-key': `${w}-${i}-cost` },
+          }),
+        ];
+        if (wave.groups.length > 1) {
+          // The focus goes to the group that takes its place, or the one before the last.
+          const after = `${w}-${Math.min(i, wave.groups.length - 2)}-enemy`;
+          const remove = this.duelButton('×', 'btn-ghost btn-small', () =>
+            this.editDraft(removeGroup(now(), w, i), after),
+          );
+          remove.setAttribute('aria-label', t.removeGroup(i + 1));
+          remove.dataset.key = `${w}-${i}-remove`;
+          foot.push(remove);
+        }
+        return h('li', { class: 'duel-group' }, [
+          ...parts,
+          h('div', { class: 'duel-group-foot' }, foot),
+        ]);
+      });
+      const add =
+        wave.groups.length < MAX_GROUPS
+          ? [
+              // The focus goes to the new group's monster.
+              this.duelButton(t.addGroup, 'btn-ghost btn-small', () =>
+                this.editDraft(addGroup(now(), w), `${w}-${wave.groups.length}-enemy`),
+              ),
+            ]
+          : [];
+      for (const b of add) b.dataset.key = `${w}-add`;
+      return h('section', { class: 'duel-wave' }, [
+        h('h3', { class: 'panel-subtitle', text: t.wave(w + 1) }),
+        h('ol', { class: 'duel-groups' }, groups),
+        ...add,
+      ]);
+    });
+    const left = goldLeft(draft);
+    const valid = validateAttack(draft) === null;
+    const later = (this.target()?.waves ?? []).slice(1).reduce((n, w) => n + w.length, 0);
+    const watch = this.duelButton(t.watchWaves, 'btn-ghost', () => this.watchWaves(now()));
+    const next = this.duelButton(
+      link.role === 'rival' ? t.nextDefence : t.sendWaves,
+      'btn-primary',
+      () => this.finishWaves(now()),
+    );
+    watch.disabled = !valid;
+    next.disabled = !valid;
+    watch.dataset.key = 'watch';
+    next.dataset.key = 'next';
+    panel.replaceChildren(
+      h('h2', { class: 'panel-title', text: t.editorTitle }),
+      h('p', { class: 'info-meta', text: t.laterMoves(later) }),
+      ...waves,
+      h('div', { class: 'duel-editor-foot' }, [
+        h('p', {
+          class: left < 0 ? 'duel-gold is-over' : 'duel-gold',
+          text: left < 0 ? t.overBudget(-left) : t.goldLeft(left),
+          attrs: { role: 'status' },
+        }),
+        h('div', { class: 'dialog-actions' }, [watch, next]),
+      ]),
+    );
+    if (keep) panel.querySelector<HTMLElement>(`[data-key="${keep}"]`)?.focus();
+  }
+
+  /** The draft waves against the rival's defence, played by themselves from the first wave. */
+  private watchWaves(waves: Wave[]): void {
+    const link = this.duelLink;
+    const defence = this.target();
+    if (!link || !defence) return;
+    this.chapter = null;
+    this.sparring = null;
+    this.draft = null;
+    this.watch = { waves, defence, skipped: 0 };
+    this.enter(new Game(duelLevel(link.duel.map, waves, SCORE_POOL)), false);
+  }
+
+  /** Between watched waves: the defence makes its moves for the next wave, which then starts. */
+  private watchNext(game: Game): void {
+    const watch = this.watch;
+    if (!watch) return;
+    for (const action of watch.defence.waves[game.wave] ?? [])
+      if (!apply(game, action)) watch.skipped++;
+    game.startWave();
+    this.paused = false;
+    this.renderControls();
+    this.flush();
+  }
+
+  private openWatchEnd(game: Game, watch: { waves: Wave[]; skipped: number }): void {
+    const t = this.t.duel;
+    const back = this.duelButton(t.backToEditor, 'btn-primary', () => this.openEditor(watch.waves));
+    this.showDialog(
+      'result',
+      [
+        h('p', { class: 'dialog-eyebrow', text: this.title() }),
+        h('h2', { text: t.took(SCORE_POOL - game.lives), attrs: { id: 'dialog-title' } }),
+        ...(watch.skipped
+          ? [h('p', { class: 'dialog-note', text: t.skipped(watch.skipped) })]
+          : []),
+        h('div', { class: 'dialog-actions' }, [back]),
+      ],
+      back,
+    );
+  }
+
+  /** The waves are done: a rival goes on to build their own defence, a challenger sends them. */
+  private finishWaves(waves: Wave[]): void {
+    const link = this.duelLink;
+    if (!link || validateAttack(waves) !== null) return;
+    if (link.role === 'rival') {
+      this.answer = waves;
+      this.openSparring(link.duel.map);
+      return;
+    }
+    const done: Duel = { ...link.duel, reply: waves };
+    const t = this.t.duel;
+    const { nodes, copy } = this.linkBlock(done);
+    const see = this.duelButton(t.seeResult, 'btn-ghost', () => this.openDuelResult(done));
+    this.showDialog(
+      'result',
+      [
+        h('p', { class: 'dialog-eyebrow', text: `${t.title} · ${t.maps[done.map]}` }),
+        h('h2', { text: t.doneTitle, attrs: { id: 'dialog-title' } }),
+        h('p', { class: 'dialog-lead', text: t.doneLead }),
+        ...nodes,
+        h('div', { class: 'dialog-actions' }, [copy, see]),
+      ],
+      copy,
+    );
+  }
+
+  /** A whole duel: both bouts scored, and who won. */
+  private openDuelResult(duel: Duel): void {
+    if (!duel.rival || !duel.reply) return;
+    const t = this.t.duel;
+    const r = rematch(
+      duel.map,
+      { defence: duel.challenger, attack: duel.reply },
+      { defence: duel.rival.defence, attack: duel.rival.attack },
+    );
+    const back = this.duelButton(this.t.backToLevels, 'btn-primary', () => this.showMenu());
+    this.showDialog(
+      'result',
+      [
+        h('p', { class: 'dialog-eyebrow', text: `${t.title} · ${t.maps[duel.map]}` }),
+        h('h2', { text: t.winner[r.winner], attrs: { id: 'dialog-title' } }),
+        h('ul', { class: 'result-news' }, [
+          h('li', { text: t.challengerTook(r.challenger.taken) }),
+          h('li', { text: t.rivalTook(r.rival.taken) }),
+        ]),
+        h('div', { class: 'dialog-actions' }, [back]),
+      ],
+      back,
+    );
   }
 
   private entry(icon: HTMLElement, name: string, text: string): HTMLElement {
@@ -1264,6 +1734,10 @@ export class App {
     if (!game) return;
     if (this.sparring) {
       this.openDuelShare(game, this.sparring);
+      return;
+    }
+    if (this.watch) {
+      this.openWatchEnd(game, this.watch);
       return;
     }
     const won = game.phase === 'won';
@@ -1768,10 +2242,16 @@ export class App {
     const game = this.game;
     if (!game) return;
     const wave = this.t.waveOf(Math.min(game.wave + 1, game.waveCount), game.waveCount);
+    // Watching or composing a duel's waves, the tree has no limit: the count is what was taken.
+    const scored = this.watch !== null || this.draft !== null;
+    ($('stat-lives').querySelector('.stat-label') as HTMLElement).textContent = scored
+      ? this.t.duel.taken
+      : this.t.lives;
     if (game.lives !== this.hud.lives) {
-      ($('stat-lives').querySelector('.stat-value') as HTMLElement).textContent =
-        `${game.lives}/${game.maxLives}`;
-      $('stat-lives').classList.toggle('is-low', game.lives * 2 < game.maxLives);
+      ($('stat-lives').querySelector('.stat-value') as HTMLElement).textContent = scored
+        ? String(SCORE_POOL - game.lives)
+        : `${game.lives}/${game.maxLives}`;
+      $('stat-lives').classList.toggle('is-low', !scored && game.lives * 2 < game.maxLives);
       if (this.hud.lives > game.lives) {
         $('stat-lives').classList.remove('is-hit');
         void $('stat-lives').offsetWidth;
@@ -1805,6 +2285,8 @@ export class App {
   private startWave(): void {
     const game = this.game;
     if (!game || game.phase !== 'build' || this.dialogKind) return;
+    // The editor's board is a still picture; a watched duel starts its waves by itself.
+    if (this.draft !== null || this.watch) return;
     if (startsOver(this.chapter, game.wave, this.siege.checkpoint))
       this.siege = saveSiege({ ...this.siege, checkpoint: null });
     game.startWave();
@@ -1842,6 +2324,11 @@ export class App {
       this.selectTower(tower.id);
       return;
     }
+    // Composing or watching a duel's waves, the defence on the board is the rival's.
+    if (this.draft !== null || this.watch) {
+      this.selectTower(null);
+      return;
+    }
     if (this.selectedKind) {
       if (this.sparringWaits(game)) return;
       const error = game.canPlace(this.selectedKind, cell.x, cell.y);
@@ -1873,7 +2360,7 @@ export class App {
    */
   private command(action: Action): boolean {
     const game = this.game;
-    if (!game) return false;
+    if (!game || this.draft !== null || this.watch) return false;
     if (!this.sparring) return apply(game, action);
     if (this.sparringWaits(game)) return false;
     return this.sparring.recorder.act(game, action);
@@ -1967,8 +2454,8 @@ export class App {
 
   private finish(game: Game): void {
     const chapter = this.chapter;
-    if (this.sparring) {
-      // A sparring run saves nothing: the defence leaves in a link.
+    if (this.sparring || this.watch) {
+      // A duel saves nothing: everything it needs travels in its links.
     } else if (chapter !== null) {
       if (game.phase === 'won') {
         const more = chapter + 1 < SIEGE_CHAPTERS.length;
@@ -2167,6 +2654,7 @@ export class App {
     const dt = this.last ? Math.min(0.1, (ts - this.last) / 1000) : 0;
     this.last = ts;
     const game = this.game;
+    if (game && this.watch && game.phase === 'build' && !this.dialogKind) this.watchNext(game);
     if (game) {
       const running =
         game.phase === 'wave' &&

@@ -1472,6 +1472,100 @@ kbd {
   font-size: var(--text-sm);
 }
 
+/* Composing or watching a duel's waves nothing is built and no wave is started by hand: the
+   editor takes the palette's place. */
+.is-editing .panel-build,
+.is-editing .panel-info,
+.is-editing #start-wave,
+.is-watching .panel-build,
+.is-watching #start-wave {
+  display: none;
+}
+
+.btn-small {
+  min-height: 1.75rem;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.duel-wave + .duel-wave {
+  margin-top: var(--space-4);
+}
+
+.duel-groups {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One group: the six fields in two columns, which fit a 326 px frame. */
+.duel-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.duel-field {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.duel-field select,
+.duel-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 1.75rem;
+  padding: 0 var(--space-1);
+  border: var(--border-width) solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.duel-count {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.duel-group-foot {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.duel-editor-foot {
+  margin-top: var(--space-4);
+}
+
+.duel-editor-foot .dialog-actions {
+  margin-top: var(--space-2);
+}
+
+.duel-gold {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.duel-gold.is-over {
+  color: var(--color-danger);
+}
+
 /* ---- Narrow screens ------------------------------------------------------------------ */
 
 @media (max-width: 960px) {
@@ -1495,6 +1589,14 @@ kbd {
      pushing the wave panel down and growing the frame. */
   :root.embed .panel-info {
     min-height: 19.5rem;
+  }
+
+  /* The wave editor keeps one height whatever the number of groups, so adding or removing a
+     group does not resize the frame: the groups scroll inside it. */
+  :root.embed .panel-editor {
+    box-sizing: border-box;
+    height: 30rem;
+    overflow-y: auto;
   }
 
   .side-inner {
