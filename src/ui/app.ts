@@ -23,6 +23,7 @@ import { paintIcon } from '../render/sprite-cache';
 import {
   answers,
   COUNTERS,
+  EMPTY_BESTIARY,
   firstLevel,
   foundInWins,
   loadBestiary,
@@ -47,6 +48,7 @@ import {
   type Progress,
   type SiegeSave,
 } from './progress';
+import { introducedIn, newBest, newCards, openedBy } from './news';
 import { showcaseScene, showcaseStart } from './showcase';
 import { isUnlocked, nextLevel } from './unlock';
 
@@ -173,6 +175,13 @@ export class App {
   private unlockAll: boolean;
   /** The characters met so far, one card each in the bestiary. */
   private bestiary: Bestiary;
+  /** The cards found in the level being played, for its result. */
+  private foundHere: Bestiary = EMPTY_BESTIARY;
+  /** What the last finished level changed besides its cards: a record and the level it opened. */
+  private news: { best: { from: number; to: number } | null; opened: number | null } = {
+    best: null,
+    opened: null,
+  };
   /** The live board behind the menu's title, or null when it could not be set up. */
   private showcase: {
     renderer: BoardRenderer;
@@ -762,6 +771,8 @@ export class App {
     window.clearTimeout(this.resultTimer);
     this.closeDialog();
     this.game = game;
+    this.foundHere = EMPTY_BESTIARY;
+    this.news = { best: null, opened: null };
     this.meet(game.level.towers, []);
     this.renderer.setGame(this.game);
     this.selectedKind = null;
@@ -998,12 +1009,19 @@ export class App {
     );
   }
 
-  /** Saves the cards of the characters just met; only a new card writes the save. */
+  /**
+   * Saves the cards of the characters just met; only a new card writes the save. A monster met
+   * during a wave gets a note over the board; the defenders of a level are found as it opens, under
+   * its briefing, so their cards wait for the result.
+   */
   private meet(towers: readonly TowerKind[], enemies: readonly EnemyKind[]): void {
     const b = this.bestiary;
     const t = towers.filter((k) => !b.towers.includes(k));
     const e = enemies.filter((k) => !b.enemies.includes(k));
-    if (t.length || e.length) this.bestiary = recordFound(b, { towers: t, enemies: e });
+    if (!t.length && !e.length) return;
+    this.bestiary = recordFound(b, { towers: t, enemies: e });
+    this.foundHere = mergeBestiary(this.foundHere, { towers: t, enemies: e });
+    if (e.length) this.toast(this.t.bestiary.found(e.map((k) => this.t.enemies[k].name)), 'news');
   }
 
   /**
@@ -1153,6 +1171,7 @@ export class App {
         h('h2', { text: won ? this.t.victory : this.t.defeat, attrs: { id: 'dialog-title' } }),
         ...(won ? [this.starsEl(stars, this.t.starsLabel(stars))] : []),
         h('p', { class: 'dialog-lead', text }),
+        ...this.newsList(),
         ...(won && last
           ? [
               h('p', {
@@ -1167,6 +1186,47 @@ export class App {
       primary,
     );
     $('dialog').classList.add(won ? 'is-won' : 'is-lost');
+  }
+
+  /**
+   * What this result changed: a record, the level it opened and what waits there, the cards found
+   * in it. The level's new characters are named only when already met, like on the bestiary cards;
+   * the others are counted.
+   */
+  private newsList(): HTMLElement[] {
+    const t = this.t.news;
+    const b = this.bestiary;
+    const lines: string[] = [];
+    const { best, opened } = this.news;
+    if (best) lines.push(t.newBest(best.to, best.from));
+    if (opened !== null) {
+      const intro = introducedIn(opened);
+      const unmet = newCards(b, intro);
+      lines.push(
+        t.opened(this.levelTitle(opened), [
+          ...intro.towers.filter((k) => b.towers.includes(k)).map((k) => this.t.towers[k].name),
+          ...intro.enemies.filter((k) => b.enemies.includes(k)).map((k) => this.t.enemies[k].name),
+          ...(unmet.towers.length ? [t.newDefenders(unmet.towers.length)] : []),
+          ...(unmet.enemies.length ? [t.newMonsters(unmet.enemies.length)] : []),
+        ]),
+      );
+    }
+    const found = this.foundHere;
+    if (found.towers.length || found.enemies.length)
+      lines.push(
+        this.t.bestiary.found([
+          ...found.towers.map((k) => this.t.towers[k].name),
+          ...found.enemies.map((k) => this.t.enemies[k].name),
+        ]),
+      );
+    if (!lines.length) return [];
+    return [
+      h(
+        'ul',
+        { class: 'result-news' },
+        lines.map((text) => h('li', { text })),
+      ),
+    ];
   }
 
   // ---- Panels ----------------------------------------------------------------------------
@@ -1746,6 +1806,7 @@ export class App {
     if (chapter !== null) {
       if (game.phase === 'won') {
         const more = chapter + 1 < SIEGE_CHAPTERS.length;
+        const before = this.siege.stars[chapter] ?? 0;
         this.siege = saveSiege(
           siegeWin(
             this.siege,
@@ -1755,13 +1816,18 @@ export class App {
             SIEGE.version,
           ),
         );
+        this.news.best = newBest(before, this.siege.stars[chapter] ?? 0);
       }
-    } else if (game.phase === 'won')
-      this.progress = recordResult(
-        this.progress,
-        game.level.id,
-        starsFor(game.lives, game.maxLives),
-      );
+    } else if (game.phase === 'won') {
+      // Read the save again: a level another tab won or opened since is not news here.
+      const before = mergeProgress(loadProgress(), this.progress);
+      const stars = starsFor(game.lives, game.maxLives);
+      this.progress = recordResult(this.progress, game.level.id, stars);
+      this.news = {
+        best: newBest(before[game.level.id] ?? 0, stars),
+        opened: openedBy(before, this.progress, this.unlockAll),
+      };
+    }
     window.clearTimeout(this.resultTimer);
     this.resultTimer = window.setTimeout(() => {
       if (this.game === game) this.openResult();
@@ -1772,10 +1838,11 @@ export class App {
    * A short visual note over the board. The announcer speaks it: a live region filled while it is
    * still hidden is skipped by many screen readers.
    */
-  private toast(text: string): void {
+  private toast(text: string, kind: 'error' | 'news' = 'error'): void {
     this.announce(text);
     const el = $('toast');
     el.textContent = text;
+    el.classList.toggle('is-news', kind === 'news');
     el.hidden = false;
     window.clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => (el.hidden = true), 2400);

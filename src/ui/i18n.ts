@@ -93,6 +93,7 @@ const en = {
     unknownMonster: 'Monster not met yet',
     unknownDefender: 'Defender not met yet',
     notMet: (n: number) => `not met yet: ${n}`,
+    found: (names: string[]) => `New in the bestiary: ${list('en', names)}.`,
   },
   langLabel: 'Language',
   build: 'Defenders',
@@ -172,6 +173,13 @@ const en = {
   tryAgain: 'Try again',
   backToLevels: 'All levels',
   allDone: 'Every level cleared. Thank you for playing.',
+  news: {
+    newBest: (to: number, from: number) => `New best: ${to} of 3 stars, up from ${from}.`,
+    opened: (level: string, waiting: string[]) =>
+      `Now open: ${level}.${waiting.length ? ` Waiting there: ${list('en', waiting)}.` : ''}`,
+    newDefenders: (n: number) => (n === 1 ? 'a new defender' : `${n} new defenders`),
+    newMonsters: (n: number) => (n === 1 ? 'a new monster' : `${n} new monsters`),
+  },
   boardLabel:
     'Game board. Use the arrow keys to move the cursor and Enter to place or select a defender.',
   announce: {
@@ -378,6 +386,11 @@ function plural(n: number, lang: Lang, forms: [string, string, string]): string 
   return `${n} ${form === 'one' ? forms[0] : form === 'few' ? forms[1] : forms[2]}`;
 }
 
+/** Names joined the way a language lists them: "a, b and c". */
+function list(lang: Lang, items: string[]): string {
+  return new Intl.ListFormat(lang, { type: 'conjunction' }).format(items);
+}
+
 const pl: Strings = {
   title: 'Heartwood',
   tagline: 'Gra typu tower defense, w której plan wygrywa z refleksem.',
@@ -444,6 +457,8 @@ const pl: Strings = {
     unknownMonster: 'Potwór jeszcze nieznany',
     unknownDefender: 'Obrońca jeszcze nieznany',
     notMet: (n: number) => `jeszcze nieznane: ${n}`,
+    found: (names) =>
+      `${names.length === 1 ? 'Nowa karta' : 'Nowe karty'} w bestiariuszu: ${list('pl', names)}.`,
   },
   langLabel: 'Język',
   build: 'Obrońcy',
@@ -522,6 +537,17 @@ const pl: Strings = {
   tryAgain: 'Spróbuj ponownie',
   backToLevels: 'Wszystkie poziomy',
   allDone: 'Wszystkie poziomy ukończone. Dziękuję za grę.',
+  news: {
+    newBest: (to, from) => `Nowy rekord: ${to} z 3 gwiazdek, wcześniej ${from}.`,
+    opened: (level, waiting) =>
+      `Odblokowany poziom: ${level}.${waiting.length ? ` Czeka tam: ${list('pl', waiting)}.` : ''}`,
+    newDefenders: (n) =>
+      n === 1
+        ? 'nowy obrońca'
+        : plural(n, 'pl', ['nowy obrońca', 'nowi obrońcy', 'nowych obrońców']),
+    newMonsters: (n) =>
+      n === 1 ? 'nowy potwór' : plural(n, 'pl', ['nowy potwór', 'nowe potwory', 'nowych potworów']),
+  },
   boardLabel: 'Plansza gry. Strzałki przesuwają kursor, Enter ustawia albo wybiera obrońcę.',
   announce: {
     waveStart: (n) => `Fala ${n} rozpoczęła się.`,

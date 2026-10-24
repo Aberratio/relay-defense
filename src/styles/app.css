@@ -871,6 +871,22 @@ kbd {
   text-align: center;
 }
 
+/* A card found during a wave: an amber border and a short glow, nothing moves; the glow's
+   duration collapses with the others under reduced motion. */
+.toast.is-news {
+  border-color: rgb(255 181 71 / 0.6);
+  animation: found var(--duration-slow) var(--ease-out);
+}
+
+@keyframes found {
+  0% {
+    box-shadow: 0 0 18px rgb(255 181 71 / 0.45);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
 .paused-badge {
   top: var(--space-4);
   border: var(--border-width) solid var(--color-line-strong);
@@ -1256,6 +1272,21 @@ kbd {
   margin-top: var(--space-3);
   color: var(--color-text-subtle);
   font-size: var(--text-sm);
+}
+
+/* What a result changed: a record, the level it opened, the cards found. */
+.result-news {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.result-news li {
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-accent);
 }
 
 .dialog-focus {
