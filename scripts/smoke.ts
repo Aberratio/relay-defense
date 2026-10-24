@@ -146,6 +146,76 @@ try {
   if (!kept) fail('redrawing the menu after another tab saved lost the focus');
   await tabs.close();
 
+  // Accessibility: names, headings, focus and shortcuts a keyboard or screen-reader player meets.
+  const a11y = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  a11y.on('pageerror', (e) => errors.push(e.message));
+  await a11y.goto(`${base}?lang=en`);
+  // A level button's name starts with what it shows, so speech input can say "01 ..." to press it.
+  const node = a11y.locator('.level-node').first();
+  const shown = `${await node.locator('.level-num').textContent()} ${await node.locator('.node-name').textContent()}`;
+  const named = await node.getAttribute('aria-label');
+  if (!named?.startsWith(shown)) fail(`level button "${named}" should start with "${shown}"`);
+  // In a level the page still has one h1, also on a phone where the top bar hides the level name.
+  await a11y.goto(`${base}?lang=en&level=handshake`);
+  await a11y.locator('.dialog .btn-primary').click();
+  const h1 = await a11y.getByRole('heading', { level: 1 }).allTextContents();
+  if (h1.length !== 1 || !h1[0]?.includes('1'))
+    fail(`a level should have one h1 naming it, got ${JSON.stringify(h1)}`);
+  // A placement error reaches the announcer, which is always in the accessibility tree: a Pulse
+  // agent on the path next to the Heart Tree.
+  await a11y.locator('#board').focus();
+  await a11y.keyboard.press('1');
+  await a11y.keyboard.press('ArrowLeft');
+  await a11y.keyboard.press('Enter');
+  await a11y
+    .waitForFunction(
+      () => {
+        const toast = document.getElementById('toast')?.textContent;
+        return !!toast && document.getElementById('announcer')?.textContent === toast;
+      },
+      undefined,
+      { timeout: 2000 },
+    )
+    .catch(() => fail('a placement error was not announced'));
+  await a11y.keyboard.press('Escape');
+  // Letter shortcuts act only while the focus is in the game, not on help or the language switch.
+  const pressed = () => a11y.locator('#pause').getAttribute('aria-pressed');
+  await a11y.locator('#start-wave').click();
+  await a11y.locator('#help-open').focus();
+  await a11y.keyboard.press('p');
+  if ((await pressed()) !== 'false') fail('"p" on the help button paused the game');
+  await a11y.locator('#board').focus();
+  await a11y.keyboard.press('p');
+  if ((await pressed()) !== 'true') fail('"p" on the board did not pause the game');
+  await a11y.locator('#pause').focus();
+  await a11y.keyboard.press('p');
+  if ((await pressed()) !== 'false') fail('"p" on the pause button did not resume the game');
+  // Losing and going back to all levels puts the focus on the menu, not on the page.
+  await a11y.locator('#speed').click();
+  await a11y.locator('#speed').click();
+  const t0 = Date.now();
+  while (!(await a11y.locator('.dialog-result').count())) {
+    if (Date.now() - t0 > 120_000) fail('level 1 without defenders was not lost in time');
+    const start = a11y.locator('#start-wave:not([disabled])');
+    if (await start.count()) await start.click();
+    await a11y.waitForTimeout(300);
+  }
+  await a11y.locator('.dialog .btn', { hasText: 'All levels' }).click();
+  const focused = await a11y.evaluate(() => document.activeElement?.getAttribute('data-role'));
+  if (focused !== 'play') fail(`after "All levels" the focus is on ${focused}, not Play`);
+  await a11y.close();
+  // Forced colours (Windows High Contrast) drop box-shadow, so the focus ring needs an outline.
+  const forced = await browser.newPage({ forcedColors: 'active' });
+  await forced.goto(`${base}?lang=en`);
+  await forced.keyboard.press('Tab');
+  const ring = await forced.evaluate(() => {
+    const s = getComputedStyle(document.activeElement as Element);
+    return `${s.outlineStyle} ${s.outlineWidth}`;
+  });
+  if (ring.startsWith('none') || ring.endsWith(' 0px'))
+    fail(`no focus ring in forced colours: outline ${ring}`);
+  await forced.close();
+
   // Embed: a parent page frames the game and receives its height.
   const parent = await browser.newPage({ viewport: { width: 1000, height: 800 } });
   parent.on('pageerror', (e) => errors.push(e.message));
@@ -259,7 +329,7 @@ try {
   await wideFrame.locator('.dialog .btn-primary').waitFor();
   await dialogFits(wideFrame, 'the split-brain briefing at 966 px');
   console.info(
-    `Smoke test passed: unlock path checked, level played, Siege opened, embed height ${height}px, narrow embed fits, dialogs fit the frame.`,
+    `Smoke test passed: unlock path checked, level played, Siege opened, accessibility checks, embed height ${height}px, narrow embed fits, dialogs fit the frame.`,
   );
 } finally {
   await browser.close();
