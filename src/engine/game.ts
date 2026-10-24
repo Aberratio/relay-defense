@@ -133,7 +133,12 @@ export function centre(cell: Cell): Point {
 }
 
 function distance(a: Point, b: Point): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  // Not Math.hypot: its result is left to the engine and differs in the last bit between V8,
+  // JavaScriptCore and SpiderMonkey. Math.sqrt is correctly rounded everywhere (IEEE 754), so a
+  // duel scored in two browsers gives the same game (scripts/determinism.ts checks it).
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 export class Game {
