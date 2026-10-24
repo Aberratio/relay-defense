@@ -143,7 +143,10 @@ tests/        engine mechanics, levels (solutions win, careless play loses), i18
   when it would cut any gate, or any fault already on the board, off from the core.
 - **Determinism.** No randomness in the simulation, fixed iteration order, fixed tick. The same
   actions always give the same result, which is what makes replays, the solver and the tests
-  possible. Randomness lives only in the renderer's particles.
+  possible. Randomness lives only in the renderer's particles. The simulation also avoids the
+  maths each JavaScript engine may round its own way (`Math.hypot`, trigonometry, `**`), so the
+  same holds in every browser: CI replays every reference solution in Node, WebKit and Firefox
+  and compares the whole state after every tick (`npm run determinism`).
 - **Smooth at any refresh rate.** The board remembers positions before each tick and
   interpolates between ticks; effects age in game time, so they keep pace with the speed setting
   and freeze on pause.
@@ -171,21 +174,22 @@ Prettier. No framework and no runtime dependencies.
 
 ## Scripts
 
-| Script                   | What it does                                                          |
-| ------------------------ | --------------------------------------------------------------------- |
-| `npm run dev`            | dev server                                                            |
-| `npm run build`          | typecheck and production build to `dist/`                             |
-| `npm test`               | unit and level tests                                                  |
-| `npm run lint`           | ESLint and Prettier check                                             |
-| `npm run smoke`          | plays the build in Chromium and checks the embed height (after build) |
-| `npm run solve -- <id>`  | look-ahead solver, prints a solution (`siege-<n>`, `siege` for Siege) |
-| `npm run sim -- <id>`    | replays the reference solution and prints the board                   |
-| `npm run probe`          | careless-player win rate per level                                    |
-| `npm run tune -- <id>`   | solver and probe across enemy strength                                |
-| `npm run sprites`        | renders the character sprites with Blender (art/README.md)            |
-| `npm run screenshots`    | README screenshots (needs `npm run dev -- --port 5391`)               |
-| `npm run check:language` | English everywhere except the Polish UI dictionary                    |
-| `npm run check:wording`  | wording guard for the build and the docs                              |
+| Script                   | What it does                                                            |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `npm run dev`            | dev server                                                              |
+| `npm run build`          | typecheck and production build to `dist/`                               |
+| `npm test`               | unit and level tests                                                    |
+| `npm run lint`           | ESLint and Prettier check                                               |
+| `npm run smoke`          | plays the build in Chromium and checks the embed height (after build)   |
+| `npm run determinism`    | replays every reference solution in Node, WebKit and Firefox: same game |
+| `npm run solve -- <id>`  | look-ahead solver, prints a solution (`siege-<n>`, `siege` for Siege)   |
+| `npm run sim -- <id>`    | replays the reference solution and prints the board                     |
+| `npm run probe`          | careless-player win rate per level                                      |
+| `npm run tune -- <id>`   | solver and probe across enemy strength                                  |
+| `npm run sprites`        | renders the character sprites with Blender (art/README.md)              |
+| `npm run screenshots`    | README screenshots (needs `npm run dev -- --port 5391`)                 |
+| `npm run check:language` | English everywhere except the Polish UI dictionary                      |
+| `npm run check:wording`  | wording guard for the build and the docs                                |
 
 Polish text lives only in the Polish block of `src/ui/i18n.ts`; the language guard fails on it
 anywhere else.

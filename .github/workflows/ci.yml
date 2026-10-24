@@ -41,3 +41,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser smoke test
         run: npm run smoke
+      - name: Install WebKit and Firefox
+        run: npx playwright install --with-deps webkit firefox
+      - name: Determinism (every replay identical in Node, WebKit and Firefox)
+        run: npm run determinism

@@ -25,6 +25,7 @@
     "tune": "tsx scripts/tune.ts",
     "solve": "tsx scripts/solve.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "determinism": "tsx scripts/determinism.ts",
     "sprites": "tsx scripts/sprites.ts"
   },
   "devDependencies": {
