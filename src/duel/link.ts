@@ -61,8 +61,9 @@ const ENEMY_CODE: Record<EnemyKind, string> = {
 const MODE_CODE: Record<TargetMode, string> = { first: 'f', last: 'l', strong: 's', weak: 'w' };
 const MAP_CODE: Record<DuelMapId, string> = { siege: 's', 'two-fronts': 't', colossus: 'c' };
 
-const invert = <K extends string>(m: Record<K, string>): Record<string, K> =>
-  Object.fromEntries(Object.entries(m).map(([k, v]) => [v, k])) as Record<string, K>;
+/** Letter to name. A Map, so a hostile key such as `constructor` finds nothing. */
+const invert = <K extends string>(m: Record<K, string>): Map<string, K> =>
+  new Map(Object.entries(m).map(([k, v]) => [v as string, k as K]));
 const TOWER_OF = invert(TOWER_CODE);
 const ENEMY_OF = invert(ENEMY_CODE);
 const MODE_OF = invert(MODE_CODE);
@@ -84,7 +85,12 @@ export type DecodeResult =
   /** `version`: made with another balance or format of the game; `invalid`: not a duel at all. */
   | { ok: false; reason: 'version' | 'invalid' };
 
-const cell = (x: number, y: number): string => x.toString(16) + y.toString(16);
+function cell(x: number, y: number): string {
+  // One hex digit each: every duel map is 16 x 10.
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > 15 || y > 15)
+    throw new Error(`cell (${x}, ${y}) does not fit a link`);
+  return x.toString(16) + y.toString(16);
+}
 
 function encodeAction(a: Action): string {
   switch (a[0]) {
@@ -99,9 +105,12 @@ function encodeAction(a: Action): string {
   }
 }
 
+/** Always all four build phases, empty ones included, so a link reads back exactly. */
 export function encodeDefence(s: Solution): string {
-  const waves = s.waves.map((w) => w.map(encodeAction).join(''));
-  return waves.join('.');
+  if (s.waves.length > DUEL_WAVE_COUNT) throw new Error('a defence has at most four build phases');
+  return Array.from({ length: DUEL_WAVE_COUNT }, (_, i) =>
+    (s.waves[i] ?? []).map(encodeAction).join(''),
+  ).join('.');
 }
 
 function index(steps: readonly number[], value: number): number {
@@ -139,7 +148,9 @@ function decodeDefence(text: string, map: DuelMapId): Solution | null {
   if (text.length > 4000) return null;
   const grid = parseMap(duelLevel(map, []).map);
   const waves: Action[][] = [];
-  for (const chunk of text === '' ? [] : text.split('.')) {
+  const chunks = text.split('.');
+  if (chunks.length !== DUEL_WAVE_COUNT) return null;
+  for (const chunk of chunks) {
     const actions: Action[] = [];
     let rest = chunk;
     while (rest) {
@@ -150,15 +161,14 @@ function decodeDefence(text: string, map: DuelMapId): Solution | null {
       const x = parseInt(t[1]!, 16);
       const y = parseInt(t[2]!, 16);
       if (!isBuildableTile(tileAt(grid, x, y))) return null;
-      const tower = TOWER_OF[t[0]!];
+      const tower = TOWER_OF.get(t[0]!);
       if (tower) actions.push(['build', tower, x, y]);
       else if (t[0] === 'u') actions.push(['up', x, y]);
       else if (t[0] === 's') actions.push(['sell', x, y]);
-      else actions.push(['mode', x, y, MODE_OF[t[3]!]!]);
+      else actions.push(['mode', x, y, MODE_OF.get(t[3]!) ?? 'first']);
     }
     waves.push(actions);
   }
-  if (waves.length > DUEL_WAVE_COUNT) return null;
   return { level: duelLevelId(map), waves };
 }
 
@@ -171,7 +181,7 @@ function decodeAttack(text: string): Wave[] | null {
     const groups: SpawnGroup[] = [];
     for (const token of chunk.split(',')) {
       const m = GROUP.exec(token);
-      const enemy = m ? ENEMY_OF[m[1]!] : undefined;
+      const enemy = m ? ENEMY_OF.get(m[1]!) : undefined;
       if (!m || !enemy) return null;
       groups.push({
         enemy,
@@ -193,10 +203,12 @@ export function decodeDuel(text: string): DecodeResult {
   const parts = text.split('~');
   if (parts.length < 4 || parts.length > 7 || parts.length === 5) return invalid;
   const [format, balance, mapCode, ...rest] = parts;
-  if (!/^\d+$/.test(format ?? '') || !/^\d+$/.test(balance ?? '')) return invalid;
+  // No leading zeros: `01` would read as 1 and write back as `1`.
+  const number = /^[1-9]\d{0,5}$/;
+  if (!number.test(format ?? '') || !number.test(balance ?? '')) return invalid;
   if (Number(format) !== LINK_FORMAT || Number(balance) !== DUEL_VERSION)
     return { ok: false, reason: 'version' };
-  const map = MAP_OF[mapCode ?? ''];
+  const map = MAP_OF.get(mapCode ?? '');
   if (!map) return invalid;
   const challenger = decodeDefence(rest[0] ?? '', map);
   if (!challenger) return invalid;
@@ -223,7 +235,15 @@ export function duelHash(d: Duel): string {
 /** The duel in a location hash, null when the hash carries none. */
 export function duelFromHash(hash: string): DecodeResult | null {
   const m = /^#duel=(.*)$/.exec(hash);
-  return m ? decodeDuel(m[1] ?? '') : null;
+  if (!m) return null;
+  // A chat app or a mail client may percent-encode the link; the text itself never needs it.
+  let text = m[1] ?? '';
+  try {
+    text = decodeURIComponent(text);
+  } catch {
+    return { ok: false, reason: 'invalid' };
+  }
+  return decodeDuel(text);
 }
 
 // Every kind has a letter, so a new monster or defender cannot ship without one.

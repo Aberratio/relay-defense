@@ -13,7 +13,6 @@ import {
 import { DUEL_VERSION, duelLevelId, sparringWaves } from '../src/levels/duel';
 import { DUEL_ATTACKS, DUEL_DEFENCES } from './duel-solutions';
 import { SIEGE_CHAIN, SIEGE_FLOOR } from './siege-solutions';
-import { SOLUTIONS } from './solutions';
 
 const defence = (map: 'siege' | 'two-fronts' | 'colossus'): Solution =>
   DUEL_DEFENCES.find((d) => d.level === duelLevelId(map))!;
@@ -41,7 +40,7 @@ describe('the duel link text', () => {
       ],
     };
     expect(encodeDefence(s)).toBe('l54u54..o54s.'); // four build phases, the last empty
-    expect(encodeDefence({ level: 'x', waves: [[['sell', 15, 9]]] })).toBe('sf9');
+    expect(encodeDefence({ level: 'x', waves: [[['sell', 15, 9]]] })).toBe('sf9...');
   });
 
   it('writes a group as a letter, four step indexes and the count', () => {
@@ -79,11 +78,9 @@ describe('the duel link text', () => {
   );
 
   it('fits a whole duel in a link with room to spare', () => {
-    // Measured (Q-011): the longest reference solution is 132 characters in this format.
+    // Measured (Q-011): the longest four-wave reference solution (Siege floor, chapter 5) is 132.
     const longest = Math.max(
-      ...[...SOLUTIONS, ...SIEGE_FLOOR, ...SIEGE_CHAIN, ...DUEL_DEFENCES].map(
-        (s) => encodeDefence(s).length,
-      ),
+      ...[...SIEGE_FLOOR, ...SIEGE_CHAIN, ...DUEL_DEFENCES].map((s) => encodeDefence(s).length),
     );
     expect(longest).toBe(132);
     expect(duelHash(result).length).toBeLessThan(600);
@@ -109,9 +106,12 @@ describe('the duel link text', () => {
       'hello',
       good.slice(0, 5).join('~'), // a rival's waves without a defence
       swap(2, 'x'), // no such map
-      swap(3, 'l00'), // a Unicorn on the rock in the corner
-      swap(3, 'l54z'), // trailing garbage
+      swap(3, 'l00...'), // a Unicorn on the rock in the corner
+      swap(3, 'l54z...'), // trailing garbage
       swap(3, 'l54.l55.l56.l57.l58'), // five build phases
+      swap(3, 'l54.l55'), // two build phases
+      swap(0, '01'), // a leading zero would not write back the same
+      ...['constructor', '__proto__', 'toString', 'hasOwnProperty'].map((key) => swap(2, key)),
       swap(4, 'c000014.s00001.s00001.s00001'), // 14 Ogre Warlords: 560 + 6 gold
       swap(4, 'p02000.s00001.s00001.s00001'), // a group with no count
       swap(4, 'p020012'), // one wave
@@ -124,7 +124,7 @@ describe('the duel link text', () => {
 
   it('never throws on random text, and whatever it accepts is a valid duel', () => {
     const random = rng(4242);
-    const alphabet = 'palmtbwusoflc0123456789abcdef.,~ ';
+    const alphabet = 'palmtbwusoflc0123456789abcdef.,~ %_';
     let accepted = 0;
     for (let i = 0; i < 3000; i++) {
       const base = i % 2 ? encodeDuel(result) : '';
@@ -133,10 +133,12 @@ describe('the duel link text', () => {
         const at = Math.floor(random() * (chars.length + 1));
         chars.splice(at, random() < 0.5 ? 1 : 0, alphabet[Math.floor(random() * alphabet.length)]!);
       }
-      const decoded = decodeDuel(chars.join(''));
+      const text = chars.join('');
+      const decoded = decodeDuel(text);
       if (decoded.ok) {
         accepted++;
-        expect(decodeDuel(encodeDuel(decoded.duel))).toEqual(decoded);
+        // Whatever is accepted writes back to the very same text.
+        expect(encodeDuel(decoded.duel)).toBe(text);
       }
     }
     expect(accepted).toBeGreaterThan(0);
@@ -147,5 +149,22 @@ describe('the duel link text', () => {
     expect(duelFromHash(duelHash(result))).toEqual({ ok: true, duel: result });
     expect(duelFromHash('')).toBeNull();
     expect(duelFromHash('#help')).toBeNull();
+  });
+
+  it('survives a link a chat app percent-encoded, and refuses broken escapes', () => {
+    const text = encodeDuel(result);
+    const mangled = `#duel=${text.replace(/~/g, '%7E').replace(/,/g, '%2C')}`;
+    expect(duelFromHash(mangled)).toEqual({ ok: true, duel: result });
+    expect(duelFromHash('#duel=1~1~s~%E0%A4%A')).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  it('writes every build phase, empty ones too, and refuses a cell a link cannot hold', () => {
+    const none: Solution = { level: 'duel-siege', waves: [] };
+    expect(encodeDefence(none)).toBe('...');
+    expect(decodeDuel(encodeDuel({ map: 'siege', challenger: none }))).toEqual({
+      ok: true,
+      duel: { map: 'siege', challenger: { level: 'duel-siege', waves: [[], [], [], []] } },
+    });
+    expect(() => encodeDefence({ level: 'x', waves: [[['up', 16, 0]]] })).toThrow();
   });
 });
