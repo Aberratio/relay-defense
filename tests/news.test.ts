@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ENEMY_KINDS, TOWER_KINDS } from '../src/engine/types';
 import { LEVELS } from '../src/levels/levels';
 import { firstLevel } from '../src/ui/bestiary';
-import { introducedIn, newBest, newCards, openedBy } from '../src/ui/news';
+import { clearedBy, introducedIn, newBest, newCards, openedBy } from '../src/ui/news';
 
 describe('newBest', () => {
   it('is a record only when a saved win is beaten', () => {
@@ -71,5 +71,18 @@ describe('newCards', () => {
       towers: [],
       enemies: [],
     });
+  });
+});
+
+describe('clearedBy', () => {
+  const ids = LEVELS.map((l) => l.id);
+  const all = Object.fromEntries(ids.map((id) => [id, 1]));
+  const allBut5 = Object.fromEntries(ids.filter((_, i) => i !== 4).map((id) => [id, 1]));
+  it('is true only for the win that completes the set, whichever level it is', () => {
+    expect(clearedBy(allBut5, all)).toBe(true);
+  });
+  it('is false while a level is unplayed and on a replay after the set is done', () => {
+    expect(clearedBy({}, { [ids[9] ?? '']: 2 })).toBe(false);
+    expect(clearedBy(all, { ...all, [ids[0] ?? '']: 3 })).toBe(false);
   });
 });

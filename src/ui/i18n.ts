@@ -472,7 +472,7 @@ const pl: Strings = {
   build: 'Obrońcy',
   startWave: 'Start fali',
   waveRunning: 'Fala w toku',
-  waveLost: 'Fala przegrana',
+  waveLost: 'Przegrana fala',
   nextWave: 'Następna fala',
   laterWaves: 'Później',
   remaining: (n) => `zostało ${n}`,

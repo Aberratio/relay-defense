@@ -33,7 +33,6 @@ import {
 } from './bestiary';
 import { strings, withLang, type Lang, type Strings } from './i18n';
 import {
-  allCleared,
   isSaveKey,
   loadProgress,
   loadSiege,
@@ -49,7 +48,7 @@ import {
   type Progress,
   type SiegeSave,
 } from './progress';
-import { introducedIn, newBest, newCards, openedBy } from './news';
+import { clearedBy, introducedIn, newBest, newCards, openedBy } from './news';
 import { showcaseScene, showcaseStart } from './showcase';
 import { isUnlocked, nextLevel } from './unlock';
 
@@ -178,11 +177,15 @@ export class App {
   private bestiary: Bestiary;
   /** The cards found in the level being played, for its result. */
   private foundHere: Bestiary = EMPTY_BESTIARY;
-  /** What the last finished level changed besides its cards: a record and the level it opened. */
-  private news: { best: { from: number; to: number } | null; opened: number | null } = {
-    best: null,
-    opened: null,
-  };
+  /**
+   * What the last finished level changed besides its cards: a record, the level it opened and
+   * whether it was the last level left unwon.
+   */
+  private news: {
+    best: { from: number; to: number } | null;
+    opened: number | null;
+    cleared: boolean;
+  } = { best: null, opened: null, cleared: false };
   /** The live board behind the menu's title, or null when it could not be set up. */
   private showcase: {
     renderer: BoardRenderer;
@@ -351,7 +354,7 @@ export class App {
         this.applyLang(lang);
         // Standalone, the choice goes in the URL so a reload keeps it; in the embed the host sets it.
         if (!this.opts.embed)
-          history.replaceState(history.state, '', withLang(location.search, lang));
+          history.replaceState(history.state, '', withLang(location.search, lang) + location.hash);
       });
     }
     window.addEventListener('storage', (e) => {
@@ -775,7 +778,7 @@ export class App {
     this.closeDialog();
     this.game = game;
     this.foundHere = EMPTY_BESTIARY;
-    this.news = { best: null, opened: null };
+    this.news = { best: null, opened: null, cleared: false };
     this.meet(game.level.towers, []);
     this.renderer.setGame(this.game);
     this.selectedKind = null;
@@ -1163,13 +1166,7 @@ export class App {
         button(this.t.replay, 'btn-ghost', () => this.openLevel(this.levelIndex, false));
       button(this.t.backToLevels, 'btn-ghost', () => this.showMenu());
     }
-    const last =
-      chapter !== null
-        ? chapter + 1 >= SIEGE_CHAPTERS.length
-        : allCleared(
-            LEVELS.map((l) => l.id),
-            this.progress,
-          );
+    const last = chapter !== null ? chapter + 1 >= SIEGE_CHAPTERS.length : this.news.cleared;
     const text = won
       ? this.t.victoryText(game.lives, game.maxLives)
       : this.t.defeatText(game.wave + 1, game.waveCount);
@@ -1835,6 +1832,7 @@ export class App {
       this.news = {
         best: newBest(before[game.level.id] ?? 0, stars),
         opened: openedBy(before, this.progress, this.unlockAll),
+        cleared: clearedBy(before, this.progress),
       };
     }
     window.clearTimeout(this.resultTimer);
