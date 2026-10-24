@@ -21,13 +21,18 @@ import { ENEMY_ART, towerSprite } from '../render/art';
 import { paintIcon } from '../render/sprite-cache';
 import { strings, type Lang, type Strings } from './i18n';
 import {
+  isSaveKey,
   loadProgress,
   loadSiege,
   loadUnlockAll,
+  mergeProgress,
+  mergeStars,
   recordResult,
   saveSiege,
   saveUnlockAll,
+  siegeWin,
   starsFor,
+  startsOver,
   type Progress,
   type SiegeSave,
 } from './progress';
@@ -319,6 +324,19 @@ export class App {
     for (const btn of $('lang-switch').querySelectorAll<HTMLButtonElement>('button[data-lang]')) {
       btn.addEventListener('click', () => this.applyLang(btn.dataset.lang === 'pl' ? 'pl' : 'en'));
     }
+    // Another tab or frame on this origin saved: show its wins too. The menu is redrawn only
+    // when it does not hold the focus, so a keyboard player is never thrown out of it.
+    window.addEventListener('storage', (e) => {
+      if (!isSaveKey(e.key)) return;
+      this.progress = mergeProgress(loadProgress(), this.progress);
+      this.unlockAll = loadUnlockAll();
+      const stored = loadSiege(SIEGE.version, SIEGE_CHAPTERS.length);
+      this.siege = {
+        stars: mergeStars(stored.stars, this.siege.stars),
+        checkpoint: stored.checkpoint,
+      };
+      if (!$('menu').hidden && !$('menu').contains(document.activeElement)) this.renderMenu();
+    });
     $('overlay').addEventListener('click', (e) => {
       if (e.target === $('overlay') && this.dialogKind === 'help') this.closeDialog();
     });
@@ -921,9 +939,11 @@ export class App {
     const chapter = this.chapter;
     if (chapter !== null) {
       const more = chapter + 1 < SIEGE_CHAPTERS.length;
+      // The next chapter starts from what this run left, even if another tab has saved since.
+      const carry = game.carry();
       if (won && more)
         primary = button(this.t.siege.nextChapter, 'btn-primary', () =>
-          this.openChapter(chapter + 1),
+          this.openChapter(chapter + 1, true, carry),
         );
       else if (won) primary = button(this.t.backToLevels, 'btn-primary', () => this.showMenu());
       else
@@ -1403,12 +1423,8 @@ export class App {
   private startWave(): void {
     const game = this.game;
     if (!game || game.phase !== 'build' || this.dialogKind) return;
-    const cp = this.siege.checkpoint;
-    if (this.chapter === 0 && game.wave === 0 && cp && cp.chapter !== 0) {
-      // "Start over" takes effect here: the old checkpoint is given up for the new run.
-      this.siege = { ...this.siege, checkpoint: null };
-      saveSiege(this.siege);
-    }
+    if (startsOver(this.chapter, game.wave, this.siege.checkpoint))
+      this.siege = saveSiege({ ...this.siege, checkpoint: null });
     game.startWave();
     this.paused = false;
     this.renderControls();
@@ -1543,17 +1559,16 @@ export class App {
     const chapter = this.chapter;
     if (chapter !== null) {
       if (game.phase === 'won') {
-        const stars = [...this.siege.stars];
-        while (stars.length <= chapter) stars.push(0);
-        stars[chapter] = Math.max(stars[chapter] ?? 0, starsFor(game.lives, game.maxLives));
         const more = chapter + 1 < SIEGE_CHAPTERS.length;
-        this.siege = {
-          stars,
-          checkpoint: more
-            ? { version: SIEGE.version, chapter: chapter + 1, carry: game.carry() }
-            : null,
-        };
-        saveSiege(this.siege);
+        this.siege = saveSiege(
+          siegeWin(
+            this.siege,
+            chapter,
+            starsFor(game.lives, game.maxLives),
+            more ? game.carry() : null,
+            SIEGE.version,
+          ),
+        );
       }
     } else if (game.phase === 'won')
       this.progress = recordResult(

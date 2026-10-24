@@ -6,7 +6,7 @@ import { replay, replayChain } from '../src/engine/replay';
 import { FOG_RANGE, TOWERS, invested } from '../src/engine/stats';
 import type { Carry, LevelDef } from '../src/engine/types';
 import { EMPTY_CARRY, SIEGE, SIEGE_CHAPTERS, chapterLevel } from '../src/levels/siege';
-import { loadSiege, saveSiege } from '../src/ui/progress';
+import { loadSiege, saveSiege, siegeWin, startsOver } from '../src/ui/progress';
 import { SIEGE_CHAIN, SIEGE_FLOOR } from './siege-solutions';
 
 // A small open map: a portal on the left, a dormant one at the bottom, the core on the right and a
@@ -233,6 +233,54 @@ describe('siege progress', () => {
     );
     expect(loadSiege(1, 5, storage)).toEqual({ stars: [0], checkpoint: null });
     expect(loadSiege(1, 5, { getItem: () => '{oops' })).toEqual({ stars: [], checkpoint: null });
+  });
+
+  it('keeps stars another tab or frame saved after this one loaded', () => {
+    const storage = memory();
+    const carry: Carry = { credits: 80, towers: [] };
+    saveSiege({ stars: [3, 3], checkpoint: { version: 1, chapter: 2, carry } }, storage);
+    const a = loadSiege(1, 5, storage);
+    const b = loadSiege(1, 5, storage);
+    saveSiege(siegeWin(a, 2, 2, carry, 1), storage);
+    const after = saveSiege(siegeWin(b, 0, 1, EMPTY_CARRY, 1), storage);
+    expect(after.stars).toEqual([3, 3, 2]);
+    expect(loadSiege(1, 5, storage)).toEqual(after);
+  });
+
+  it('keeps the checkpoint of the latest win, and a start over clears it but not the stars', () => {
+    const storage = memory();
+    const carry: Carry = { credits: 80, towers: [] };
+    saveSiege({ stars: [3, 3, 2], checkpoint: { version: 1, chapter: 3, carry } }, storage);
+    const stale: ReturnType<typeof loadSiege> = { stars: [1], checkpoint: null };
+    expect(saveSiege(siegeWin(stale, 0, 2, EMPTY_CARRY, 1), storage)).toEqual({
+      stars: [3, 3, 2],
+      checkpoint: { version: 1, chapter: 1, carry: EMPTY_CARRY },
+    });
+    expect(saveSiege({ stars: [], checkpoint: null }, storage)).toEqual({
+      stars: [3, 3, 2],
+      checkpoint: null,
+    });
+  });
+
+  it('records a win: best stars per chapter, the next checkpoint or none after the last', () => {
+    const carry: Carry = { credits: 50, towers: [] };
+    expect(siegeWin({ stars: [], checkpoint: null }, 1, 2, carry, 4)).toEqual({
+      stars: [0, 2],
+      checkpoint: { version: 4, chapter: 2, carry },
+    });
+    expect(siegeWin({ stars: [3, 3], checkpoint: null }, 1, 1, null, 4)).toEqual({
+      stars: [3, 3],
+      checkpoint: null,
+    });
+  });
+
+  it('gives up the checkpoint only on the first wave of a new run from chapter 1', () => {
+    const cp = { version: 1, chapter: 2, carry: EMPTY_CARRY };
+    expect(startsOver(0, 0, cp)).toBe(true);
+    expect(startsOver(0, 1, cp)).toBe(false);
+    expect(startsOver(2, 0, cp)).toBe(false);
+    expect(startsOver(0, 0, { ...cp, chapter: 0 })).toBe(false);
+    expect(startsOver(0, 0, null)).toBe(false);
   });
 });
 

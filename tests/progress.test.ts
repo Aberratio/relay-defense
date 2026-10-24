@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadProgress, recordResult, starsFor } from '../src/ui/progress';
+import { loadProgress, mergeProgress, recordResult, starsFor } from '../src/ui/progress';
 
 function memory(): Storage {
   const data = new Map<string, string>();
@@ -35,6 +35,9 @@ describe('progress', () => {
     const broken = { getItem: () => '{not json' };
     expect(loadProgress(broken)).toEqual({});
     const blocked = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
       setItem: () => {
         throw new Error('blocked');
       },
@@ -43,5 +46,28 @@ describe('progress', () => {
     expect(loadProgress({ getItem: () => JSON.stringify({ a: 9, b: 'x', c: 2 }) })).toEqual({
       c: 2,
     });
+  });
+
+  it('keeps wins from another tab or frame that saved after this one loaded', () => {
+    const storage = memory();
+    recordResult({}, 'handshake', 3, storage);
+    const a = loadProgress(storage);
+    const b = loadProgress(storage);
+    recordResult(a, 'fan-out', 2, storage);
+    const after = recordResult(b, 'bulwark', 2, storage);
+    expect(after).toEqual({ handshake: 3, 'fan-out': 2, bulwark: 2 });
+    expect(loadProgress(storage)).toEqual(after);
+  });
+
+  it('never lowers a level when an older copy is written back', () => {
+    const storage = memory();
+    const stale = recordResult({}, 'handshake', 1, storage);
+    recordResult(loadProgress(storage), 'handshake', 3, storage);
+    expect(recordResult(stale, 'handshake', 2, storage).handshake).toBe(3);
+    expect(loadProgress(storage)).toEqual({ handshake: 3 });
+  });
+
+  it('merges two saves level by level', () => {
+    expect(mergeProgress({ a: 1, b: 3 }, { b: 2, c: 2 })).toEqual({ a: 1, b: 3, c: 2 });
   });
 });

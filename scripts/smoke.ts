@@ -106,6 +106,23 @@ try {
   const title = await page.locator('#level-name').textContent();
   if (!title?.startsWith('Siege 1')) fail(`expected Siege chapter 1, got ${title}`);
 
+  // Two tabs: a win saved in one shows in the other's open menu without a reload.
+  const tabs = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const [tabA, tabB] = [await tabs.newPage(), await tabs.newPage()];
+  for (const tab of [tabA, tabB]) {
+    tab.on('pageerror', (e) => errors.push(e.message));
+    await tab.goto(`${base}?lang=en`);
+  }
+  await tabA.evaluate(() =>
+    localStorage.setItem('relay-defense:progress:v1', JSON.stringify({ handshake: 3 })),
+  );
+  await tabB
+    .locator('.level-node[aria-label$="3 of 3 stars"]')
+    .first()
+    .waitFor({ timeout: 5000 })
+    .catch(() => fail('a win saved in another tab did not show in the open menu'));
+  await tabs.close();
+
   // Embed: a parent page frames the game and receives its height.
   const parent = await browser.newPage({ viewport: { width: 1000, height: 800 } });
   parent.on('pageerror', (e) => errors.push(e.message));
