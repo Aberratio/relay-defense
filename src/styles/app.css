@@ -1388,7 +1388,8 @@ kbd {
     display: none;
   }
 
-  /* Out of sight but still the page's h1 for assistive technology. */
+  /* Out of sight but still the page's h1 for assistive technology. Like .visually-hidden, but
+     without its -1px margin, which would pull the top bar's flex row. */
   .level-name {
     position: absolute;
     width: 1px;

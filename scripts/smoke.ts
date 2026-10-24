@@ -159,7 +159,7 @@ try {
   await a11y.goto(`${base}?lang=en&level=handshake`);
   await a11y.locator('.dialog .btn-primary').click();
   const h1 = await a11y.getByRole('heading', { level: 1 }).allTextContents();
-  if (h1.length !== 1 || !h1[0]?.includes('1'))
+  if (h1.length !== 1 || h1[0] !== '1. First Watch')
     fail(`a level should have one h1 naming it, got ${JSON.stringify(h1)}`);
   // A placement error reaches the announcer, which is always in the accessibility tree: a Pulse
   // agent on the path next to the Heart Tree.
@@ -206,6 +206,7 @@ try {
   await a11y.close();
   // Forced colours (Windows High Contrast) drop box-shadow, so the focus ring needs an outline.
   const forced = await browser.newPage({ forcedColors: 'active' });
+  forced.on('pageerror', (e) => errors.push(e.message));
   await forced.goto(`${base}?lang=en`);
   await forced.keyboard.press('Tab');
   const ring = await forced.evaluate(() => {
