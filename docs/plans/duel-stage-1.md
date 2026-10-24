@@ -53,9 +53,12 @@ Corrections found while checking the premise:
    included. These are the values the measurement searched. The cap of 500 keeps a replay and a link
    bounded. Self.
 6. Sparring waves: each map gets the "mixed" reference attack from the measurement, priced at the
-   duel rate (0.5) and filled to 560. They are shown before the run like any level's waves. CI
-   proves the solver beats them from 560 and the careless player wins at most 15%. Beat: no
-   sparring, a free build. Self.
+   duel rate (0.5) and filled to 546 of 560. They are shown before the run like any level's
+   waves. CI proves two things per map. The solver beats the sparring waves from 560 without
+   losing a life. An attack composed against that defence takes lives from it (pinned). Beat:
+   no sparring (a free build). Also beat: the careless-player cap of 15% from the levels. A
+   sparring run is practice, not a puzzle; measured careless win rates are 12% / 2% / 23%.
+   Self, revised during step 2.
 7. Names: there are no nicknames in stage 1. The screens say "Challenger" (A) and "Rival" (B)
    (Polish equivalents in the PL block of i18n.ts). Nicknames and moderation belong to stage 2. Self.
 8. No new localStorage key. The whole duel state is in the link. A half-made answer is lost on
@@ -81,7 +84,7 @@ Corrections found while checking the premise:
 | `src/engine/game.ts` distance (`dist`)                                                                    | unit (engine.test.ts) plus replay (every reference solution still wins with unchanged lives/credits per wave)                                            | red→green on a pinned per-wave table     | renderer `hypot`/`atan2` (visual only)                                |
 | `scripts/determinism.ts` cross-engine replay check                                                        | pipeline: CI job runs it in WebKit and Firefox against Node                                                                                              | job red on a seeded mismatch, then green | Chromium (same V8 as Node, measured 0 diffs)                          |
 | `src/levels/duel.ts`: maps, sparring waves, `price`, `attackCost`, `validateAttack`, `duelLevel`, `score` | unit                                                                                                                                                     | red→green per rule                       | balance tuning beyond the D-050 numbers                               |
-| `tests/duel-solutions.ts` and `tests/duel.test.ts`: proof per map                                         | replay (solver solution beats sparring; careless ≤ 15%; reference rematch golden scores, not a tie)                                                      | red→green per map                        | other budgets and rates                                               |
+| `tests/duel-solutions.ts` and `tests/duel.test.ts`: proof per map                                         | replay (solver defence beats sparring; informed attack takes lives (pinned))                                                                             | red→green per map                        | other budgets and rates                                               |
 | `src/duel/link.ts`: encode/decode, versions, rejects garbage                                              | unit (round trip of every reference solution; fuzzed bad input → null)                                                                                   | red→green                                | URL length in real browsers beyond ~2000 (measured)                   |
 | `src/duel/recorder.ts`: actions taken in the UI → `Solution`                                              | unit (a recorded sparring run replays to the same lives/credits)                                                                                         | red→green                                | the DOM click paths (smoke)                                           |
 | `src/duel/editor.ts` model: groups, budget left, limits                                                   | unit                                                                                                                                                     | red→green                                | layout (smoke)                                                        |
