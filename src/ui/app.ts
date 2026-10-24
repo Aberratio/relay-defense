@@ -401,6 +401,13 @@ export class App {
     window.addEventListener('storage', (e) => {
       if (isSaveKey(e.key)) this.reloadSaves();
     });
+    // A duel link pasted into a tab that already has the game open.
+    window.addEventListener('hashchange', () => {
+      const link = duelFromHash(location.hash);
+      if (!link) return;
+      this.showMenu();
+      this.openDuelLink(link);
+    });
     $('overlay').addEventListener('click', (e) => {
       const light = this.dialogKind === 'help' || this.dialogKind === 'bestiary';
       if (e.target === $('overlay') && light) this.closeDialog();
@@ -1240,8 +1247,12 @@ export class App {
     this.enter(this.previewGame(link.duel.map, draft), false);
   }
 
-  /** One edit of the draft: the board, the wave list and the editor follow it. */
-  private editDraft(next: Wave[]): void {
+  /**
+   * One edit of the draft: the board and the wave list follow it. The editor is rebuilt unless the
+   * edit came from typing a count, which only refreshes the numbers: rebuilding under a click
+   * that blurs the field would swallow the click.
+   */
+  private editDraft(next: Wave[], focus?: string, rebuild = true): void {
     const link = this.duelLink;
     if (!link || this.draft === null) return;
     this.draft = next;
@@ -1251,21 +1262,52 @@ export class App {
     this.hud = { lives: -1, credits: -1, wave: '' };
     this.renderWaves();
     this.refreshHud();
-    this.renderEditor();
+    if (rebuild) this.renderEditor(focus);
+    else this.refreshEditor();
   }
 
-  /** The wave editor in the side panel: four waves of one to four groups, and the gold left. */
-  private renderEditor(): void {
-    const panel = $('editor');
+  /** The editor's numbers after a typed count: group costs, the gold left and the buttons. */
+  private refreshEditor(): void {
     const draft = this.draft;
+    if (draft === null) return;
+    const t = this.t.duel;
+    const panel = $('editor');
+    draft.forEach((wave, w) =>
+      wave.groups.forEach((g, i) => {
+        const cost = panel.querySelector<HTMLElement>(`[data-key="${w}-${i}-cost"]`);
+        if (cost) cost.textContent = t.cost(groupCost(g));
+      }),
+    );
+    const left = goldLeft(draft);
+    const gold = panel.querySelector<HTMLElement>('.duel-gold');
+    if (gold) {
+      gold.textContent = left < 0 ? t.overBudget(-left) : t.goldLeft(left);
+      gold.classList.toggle('is-over', left < 0);
+    }
+    const valid = validateAttack(draft) === null;
+    for (const key of ['watch', 'next'])
+      panel
+        .querySelector<HTMLButtonElement>(`[data-key="${key}"]`)
+        ?.toggleAttribute('disabled', !valid);
+  }
+
+  /**
+   * The wave editor in the side panel: four waves of one to four groups, and the gold left. The
+   * element that had the focus gets it back, or `focus` when it is gone (a removed group).
+   */
+  private renderEditor(focus?: string): void {
+    const panel = $('editor');
     const link = this.duelLink;
-    if (draft === null || !link) {
+    if (this.draft === null || !link) {
       panel.replaceChildren();
       return;
     }
+    const draft = this.draft;
+    // Every handler edits the draft as it is when it fires, not as it was when this was drawn.
+    const now = (): Wave[] => this.draft ?? draft;
     const t = this.t.duel;
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const keep = focused?.closest('#editor') ? focused.dataset.key : undefined;
+    const keep = focus ?? (focused?.closest('#editor') ? focused.dataset.key : undefined);
     const select = (
       key: string,
       label: string,
@@ -1288,7 +1330,7 @@ export class App {
     const waves = draft.map((wave, w) => {
       const groups = wave.groups.map((g, i) => {
         const field = (f: GroupField) => (v: string) =>
-          this.editDraft(setField(draft, w, i, f, f === 'enemy' ? (v as EnemyKind) : Number(v)));
+          this.editDraft(setField(now(), w, i, f, f === 'enemy' ? (v as EnemyKind) : Number(v)));
         const count = h('input', {
           attrs: {
             type: 'number',
@@ -1301,11 +1343,16 @@ export class App {
           },
         });
         count.value = String(g.count);
-        count.addEventListener('change', () =>
-          this.editDraft(setField(draft, w, i, 'count', Number(count.value))),
-        );
+        count.addEventListener('input', () => {
+          if (count.value !== '')
+            this.editDraft(setField(now(), w, i, 'count', Number(count.value)), undefined, false);
+        });
+        // On leaving the field it shows the count the draft kept (whole, 1 to 500).
+        count.addEventListener('change', () => {
+          count.value = String(now()[w]?.groups[i]?.count ?? 1);
+        });
         const max = this.duelButton(t.max, 'btn-ghost btn-small', () =>
-          this.editDraft(fillGroup(draft, w, i)),
+          this.editDraft(fillGroup(now(), w, i)),
         );
         max.dataset.key = `${w}-${i}-max`;
         const parts: HTMLElement[] = [
@@ -1352,10 +1399,18 @@ export class App {
             field('spawn'),
           ),
         ];
-        const foot: HTMLElement[] = [h('span', { class: 'duel-cost', text: t.cost(groupCost(g)) })];
+        const foot: HTMLElement[] = [
+          h('span', {
+            class: 'duel-cost',
+            text: t.cost(groupCost(g)),
+            attrs: { 'data-key': `${w}-${i}-cost` },
+          }),
+        ];
         if (wave.groups.length > 1) {
+          // The focus goes to the group that takes its place, or the one before the last.
+          const after = `${w}-${Math.min(i, wave.groups.length - 2)}-enemy`;
           const remove = this.duelButton('×', 'btn-ghost btn-small', () =>
-            this.editDraft(removeGroup(draft, w, i)),
+            this.editDraft(removeGroup(now(), w, i), after),
           );
           remove.setAttribute('aria-label', t.removeGroup(i + 1));
           remove.dataset.key = `${w}-${i}-remove`;
@@ -1369,8 +1424,9 @@ export class App {
       const add =
         wave.groups.length < MAX_GROUPS
           ? [
+              // The focus goes to the new group's monster.
               this.duelButton(t.addGroup, 'btn-ghost btn-small', () =>
-                this.editDraft(addGroup(draft, w)),
+                this.editDraft(addGroup(now(), w), `${w}-${wave.groups.length}-enemy`),
               ),
             ]
           : [];
@@ -1384,11 +1440,11 @@ export class App {
     const left = goldLeft(draft);
     const valid = validateAttack(draft) === null;
     const later = (this.target()?.waves ?? []).slice(1).reduce((n, w) => n + w.length, 0);
-    const watch = this.duelButton(t.watchWaves, 'btn-ghost', () => this.watchWaves(draft));
+    const watch = this.duelButton(t.watchWaves, 'btn-ghost', () => this.watchWaves(now()));
     const next = this.duelButton(
       link.role === 'rival' ? t.nextDefence : t.sendWaves,
       'btn-primary',
-      () => this.finishWaves(draft),
+      () => this.finishWaves(now()),
     );
     watch.disabled = !valid;
     next.disabled = !valid;

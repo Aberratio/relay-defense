@@ -1591,6 +1591,14 @@ kbd {
     min-height: 19.5rem;
   }
 
+  /* The wave editor keeps one height whatever the number of groups, so adding or removing a
+     group does not resize the frame: the groups scroll inside it. */
+  :root.embed .panel-editor {
+    box-sizing: border-box;
+    height: 30rem;
+    overflow-y: auto;
+  }
+
   .side-inner {
     position: static;
     display: grid;

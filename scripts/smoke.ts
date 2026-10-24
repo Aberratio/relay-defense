@@ -525,6 +525,9 @@ try {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   if (editorWide > 0) fail(`the wave editor scrolls sideways by ${editorWide} px at 360 px`);
+  // A count typed and a button clicked straight away: the click must not be lost to the field.
+  await rival.locator('[data-key="0-1-count"]').fill('25');
+  if ((await gold()) !== '8 of 560 gold left') fail(`after typing 25 Goblins: "${await gold()}"`);
   await rival.locator('#editor [data-key="watch"]').click();
   await rival.locator('#speed').click();
   await rival.locator('#speed').click();
@@ -562,6 +565,18 @@ try {
   await direct.goto(result);
   if ((await direct.locator('.dialog h2').textContent()) !== winner)
     fail('the result link shows another result');
+  // The editor in a narrow kokot.it frame: adding a group must not change the frame's height.
+  const framed = await browser.newPage({ viewport: { width: 360, height: 740 } });
+  framed.on('pageerror', (e) => errors.push(e.message));
+  await host(framed);
+  const editorFrame = await mount(framed, 326, `${base}?embed=1&lang=en${new URL(link).hash}`);
+  await editorFrame.locator('.dialog .btn-primary').click();
+  await settle(editorFrame);
+  const before = await frameHeight(framed);
+  await editorFrame.locator('#editor [data-key="0-add"]').click();
+  await settle(editorFrame);
+  const after = await frameHeight(framed);
+  if (after !== before) fail(`adding a group resized the frame from ${before} to ${after} px`);
   await direct.goto(`${base}?lang=en#duel=1~1~constructor~`);
   await direct.reload();
   if (
