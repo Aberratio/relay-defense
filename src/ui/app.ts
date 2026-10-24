@@ -6,6 +6,7 @@ import { DT, ENEMIES, FOG_RANGE, TOWERS, type TowerLevel } from '../engine/stats
 import {
   ENEMY_KINDS,
   TARGET_MODES,
+  TOWER_KINDS,
   type Cell,
   type EnemyKind,
   type Carry,
@@ -19,6 +20,16 @@ import { BoardRenderer, type BoardView } from '../render/board';
 import { readPalette, type Palette } from '../render/palette';
 import { ENEMY_ART, towerSprite } from '../render/art';
 import { paintIcon } from '../render/sprite-cache';
+import {
+  answers,
+  COUNTERS,
+  firstLevel,
+  foundInWins,
+  loadBestiary,
+  mergeBestiary,
+  recordFound,
+  type Bestiary,
+} from './bestiary';
 import { strings, type Lang, type Strings } from './i18n';
 import {
   isSaveKey,
@@ -160,6 +171,8 @@ export class App {
   private progress: Progress;
   /** Every level open, chosen in the help. */
   private unlockAll: boolean;
+  /** The characters met so far, one card each in the bestiary. */
+  private bestiary: Bestiary;
   /** The live board behind the menu's title, or null when it could not be set up. */
   private showcase: {
     renderer: BoardRenderer;
@@ -200,7 +213,7 @@ export class App {
   private last = 0;
   private resultTimer = 0;
   private toastTimer = 0;
-  private dialogKind: 'brief' | 'result' | 'help' | null = null;
+  private dialogKind: 'brief' | 'result' | 'help' | 'bestiary' | null = null;
   /** The element that had focus when a dialog opened, to return to on close. */
   private opener: HTMLElement | null = null;
   private infoRefresh = 0;
@@ -221,6 +234,7 @@ export class App {
     this.progress = loadProgress();
     this.unlockAll = loadUnlockAll();
     this.siege = loadSiege(SIEGE.version, SIEGE_CHAPTERS.length);
+    this.bestiary = mergeBestiary(loadBestiary(), foundInWins(this.progress));
   }
 
   /**
@@ -328,7 +342,8 @@ export class App {
       if (isSaveKey(e.key)) this.reloadSaves();
     });
     $('overlay').addEventListener('click', (e) => {
-      if (e.target === $('overlay') && this.dialogKind === 'help') this.closeDialog();
+      const light = this.dialogKind === 'help' || this.dialogKind === 'bestiary';
+      if (e.target === $('overlay') && light) this.closeDialog();
     });
 
     const c = this.canvas;
@@ -401,6 +416,7 @@ export class App {
       this.renderControls();
     }
     if (this.dialogKind === 'help') this.openHelp();
+    else if (this.dialogKind === 'bestiary') this.openBestiary();
     else if (this.dialogKind === 'brief') this.openBrief();
     else if (this.dialogKind === 'result') this.openResult();
   }
@@ -460,15 +476,21 @@ export class App {
    * redrawn only when something changed, and the focus stays on the same button.
    */
   private reloadSaves(): void {
-    const before = JSON.stringify([this.progress, this.unlockAll, this.siege]);
+    const before = JSON.stringify([this.progress, this.unlockAll, this.siege, this.bestiary]);
     this.progress = mergeProgress(loadProgress(), this.progress);
+    this.bestiary = mergeBestiary(
+      mergeBestiary(loadBestiary(), foundInWins(this.progress)),
+      this.bestiary,
+    );
     this.unlockAll = loadUnlockAll();
     const stored = loadSiege(SIEGE.version, SIEGE_CHAPTERS.length);
     this.siege = {
       stars: mergeStars(stored.stars, this.siege.stars),
       checkpoint: stored.checkpoint,
     };
-    if (JSON.stringify([this.progress, this.unlockAll, this.siege]) === before) return;
+    if (JSON.stringify([this.progress, this.unlockAll, this.siege, this.bestiary]) === before)
+      return;
+    if (this.dialogKind === 'bestiary') this.openBestiary();
     const toggle = document.querySelector('#dialog [data-role="unlock-all"]');
     if (toggle) toggle.textContent = this.unlockAll ? this.t.lockAgain : this.t.unlockAll;
     if ($('menu').hidden) return;
@@ -521,7 +543,25 @@ export class App {
       attrs: { type: 'button', 'data-role': 'how' },
     });
     how.addEventListener('click', () => this.openHelp());
-    $('hero-actions').replaceChildren(play, how);
+    const found = this.bestiary.towers.length + this.bestiary.enemies.length;
+    const total = TOWER_KINDS.length + ENEMY_KINDS.length;
+    const book = h(
+      'button',
+      {
+        class: 'btn btn-ghost btn-bestiary',
+        attrs: {
+          type: 'button',
+          'data-role': 'bestiary',
+          'aria-label': this.t.bestiary.label(found, total),
+        },
+      },
+      [
+        this.t.bestiary.title,
+        h('span', { class: 'bestiary-count', text: this.t.bestiary.count(found, total) }),
+      ],
+    );
+    book.addEventListener('click', () => this.openBestiary());
+    $('hero-actions').replaceChildren(play, how, book);
   }
 
   /** The Siege card under the levels: chapters with their stars, and how to go on. */
@@ -722,6 +762,7 @@ export class App {
     window.clearTimeout(this.resultTimer);
     this.closeDialog();
     this.game = game;
+    this.meet(game.level.towers, []);
     this.renderer.setGame(this.game);
     this.selectedKind = null;
     this.selectedTower = null;
@@ -755,7 +796,7 @@ export class App {
   // ---- Dialogs ---------------------------------------------------------------------------
 
   private showDialog(
-    kind: 'brief' | 'result' | 'help',
+    kind: 'brief' | 'result' | 'help' | 'bestiary',
     content: Node[],
     focus?: HTMLElement,
   ): void {
@@ -952,6 +993,96 @@ export class App {
           ...(this.opts.embed ? [] : [h('p', { class: 'dialog-note' }, [source])]),
           close,
         ]),
+      ],
+      close,
+    );
+  }
+
+  /** Saves the cards of the characters just met; only a new card writes the save. */
+  private meet(towers: readonly TowerKind[], enemies: readonly EnemyKind[]): void {
+    const b = this.bestiary;
+    const t = towers.filter((k) => !b.towers.includes(k));
+    const e = enemies.filter((k) => !b.enemies.includes(k));
+    if (t.length || e.length) this.bestiary = recordFound(b, { towers: t, enemies: e });
+  }
+
+  /**
+   * The bestiary: a card per monster and defender. A found card says what the character does and
+   * how it meets the other side (the defenders that answer a monster, the monsters a defender
+   * answers); an unfound one shows a silhouette and the level where it appears.
+   */
+  private openBestiary(): void {
+    const t = this.t.bestiary;
+    const close = h('button', {
+      class: 'btn btn-ghost',
+      text: this.t.close,
+      attrs: { type: 'button' },
+    });
+    close.addEventListener('click', () => this.closeDialog());
+    const name = (k: TowerKind | EnemyKind) =>
+      (TOWER_KINDS as readonly string[]).includes(k)
+        ? this.t.towers[k as TowerKind].name
+        : this.t.enemies[k as EnemyKind].name;
+    const card = (
+      kind: TowerKind | EnemyKind,
+      found: boolean,
+      icon: HTMLCanvasElement,
+      links: readonly (TowerKind | EnemyKind)[],
+      linkLabel: string,
+    ): HTMLElement => {
+      const where = this.levelTitle(firstLevel(kind));
+      const lines: HTMLElement[] = found
+        ? [
+            h('h4', { class: 'card-name', text: name(kind) }),
+            h('p', {
+              text: (TOWER_KINDS as readonly string[]).includes(kind)
+                ? this.t.towers[kind as TowerKind].text
+                : this.t.enemies[kind as EnemyKind].text,
+            }),
+            ...(links.length
+              ? [
+                  h('p', { class: 'card-link' }, [
+                    h('strong', { text: `${linkLabel}: ` }),
+                    links.map(name).join(', '),
+                  ]),
+                ]
+              : []),
+            h('p', { class: 'card-where', text: `${t.metIn}: ${where}` }),
+          ]
+        : [
+            h('h4', { class: 'card-name', text: t.unknown }),
+            h('p', { class: 'card-where', text: `${t.appearsIn}: ${where}` }),
+          ];
+      return h('li', { class: found ? 'card' : 'card is-unknown', attrs: { 'data-kind': kind } }, [
+        icon,
+        h('div', {}, lines),
+      ]);
+    };
+    const b = this.bestiary;
+    const found = b.towers.length + b.enemies.length;
+    const total = TOWER_KINDS.length + ENEMY_KINDS.length;
+    this.showDialog(
+      'bestiary',
+      [
+        h('h2', { text: t.title, attrs: { id: 'dialog-title' } }),
+        h('p', { class: 'dialog-lead', text: t.lead(found, total) }),
+        h('h3', { text: t.monsters }),
+        h(
+          'ul',
+          { class: 'cards' },
+          ENEMY_KINDS.map((k) =>
+            card(k, b.enemies.includes(k), this.enemyIcon(k, 48), COUNTERS[k], t.answeredBy),
+          ),
+        ),
+        h('h3', { text: t.defenders }),
+        h(
+          'ul',
+          { class: 'cards' },
+          TOWER_KINDS.map((k) =>
+            card(k, b.towers.includes(k), this.towerIcon(k, 48), answers(k), t.answers),
+          ),
+        ),
+        h('div', { class: 'dialog-actions' }, [close]),
       ],
       close,
     );
@@ -1800,6 +1931,11 @@ export class App {
           if (game.phase !== 'wave') break;
         }
         if (game.phase !== 'wave') this.acc = 0;
+        if (this.bestiary.enemies.length < ENEMY_KINDS.length)
+          this.meet(
+            [],
+            game.enemies.map((e) => e.kind),
+          );
         this.renderer.advance(dt * this.speed());
         if (ts - this.infoRefresh > 250) {
           this.infoRefresh = ts;

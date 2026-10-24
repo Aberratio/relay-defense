@@ -30,6 +30,16 @@ const mount = async (page: Page, width: number, src: string): Promise<Frame> => 
   );
   return (await (await page.waitForSelector('iframe')).contentFrame()) ?? fail('no frame');
 };
+/**
+ * A blank same-origin page to frame the game in. A copy of the game as the host page would take
+ * the frame's saves through its storage listener with its own DOM already replaced.
+ */
+const host = async (page: Page) => {
+  await page.route(`${base}host.html`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>host</title>' }),
+  );
+  await page.goto(`${base}host.html`);
+};
 /** Two frames for the height report and the frame resize to settle. */
 const settle = async (frame: Frame) => {
   await frame.evaluate(
@@ -97,6 +107,39 @@ try {
   await page.locator('#start-wave:not([disabled])').waitFor({ timeout: 60_000 });
   const wave = await page.locator('#stat-wave .stat-value').textContent();
   if (!wave?.startsWith('2')) fail(`expected wave 2 after clearing the first, got ${wave}`);
+
+  // Bestiary: the Archer (available) and the Goblin (on the board) of level 1 are found and saved
+  // under their own key; a monster not met yet shows only where it appears. Escape closes it and
+  // the focus goes back to the menu button.
+  await page.locator('#home').click();
+  const book = page.locator('#hero-actions [data-role="bestiary"]');
+  if ((await book.getAttribute('aria-label')) !== 'Bestiary, 2 of 14 cards found')
+    fail(`bestiary button says "${await book.getAttribute('aria-label')}" after level 1`);
+  const saved = await page.evaluate(() => localStorage.getItem('relay-defense:bestiary:v1'));
+  if (saved !== '{"towers":["pulse"],"enemies":["spark"]}') fail(`bestiary saved ${saved}`);
+  await book.click();
+  const goblin = page.locator('.dialog-bestiary .card[data-kind="spark"]');
+  if ((await goblin.getAttribute('class')) !== 'card') fail('the Goblin card is not found');
+  if (!(await goblin.textContent())?.includes('Answered by: Archer'))
+    fail('the Goblin card does not name the defender that answers it');
+  const troll = page.locator('.dialog-bestiary .card[data-kind="bulwark"]');
+  if ((await troll.getAttribute('class')) !== 'card is-unknown') fail('the Troll card is open');
+  if ((await troll.textContent())?.includes('Troll')) fail('an unfound card gives its name away');
+  if (!(await troll.textContent())?.includes('Appears in: 3. Iron Hides'))
+    fail('an unfound card does not say where it appears');
+  await page.keyboard.press('Escape');
+  if (!(await page.locator('#overlay').isHidden())) fail('Escape did not close the bestiary');
+  const back = await page.evaluate(() => document.activeElement?.getAttribute('data-role'));
+  if (back !== 'bestiary') fail(`closing the bestiary left the focus on ${back}`);
+  // A guest who won levels before the bestiary existed finds their cards already open.
+  await page.evaluate(() => {
+    localStorage.removeItem('relay-defense:bestiary:v1');
+    localStorage.setItem('relay-defense:progress:v1', JSON.stringify({ handshake: 3 }));
+  });
+  await page.reload();
+  if ((await book.getAttribute('aria-label')) !== 'Bestiary, 2 of 14 cards found')
+    fail('cards of levels won before the bestiary are not open');
+  await page.evaluate(() => localStorage.clear());
 
   // Siege: the card under the levels opens the first chapter.
   await page.goto(`${base}?lang=en`);
@@ -246,7 +289,7 @@ try {
   // or by a stray pixel of height.
   const narrow = await browser.newPage({ viewport: { width: 360, height: 740 } });
   narrow.on('pageerror', (e) => errors.push(e.message));
-  await narrow.goto(base);
+  await host(narrow);
   for (const lang of ['pl', 'en']) {
     const frame = await mount(narrow, 326, `${base}?embed=1&lang=${lang}`);
     const overflow = async (screen: string) => {
@@ -277,6 +320,15 @@ try {
     };
     await frame.locator('.level-node').first().waitFor();
     await overflow('menu');
+    // The bestiary, the longest dialog, grows the frame like help does and fits 326 px.
+    const menuHeight = await frameHeight(narrow);
+    await frame.locator('[data-role="bestiary"]').click();
+    await dialogFits(frame, `the bestiary (${lang})`);
+    await overflow('the bestiary');
+    await frame.locator('.dialog-bestiary .btn').click();
+    await settle(frame);
+    if ((await frameHeight(narrow)) !== menuHeight)
+      fail(`closing the bestiary (${lang}) did not give the menu its height back`);
     await frame.locator('#siege .btn-primary').click();
     await frame.locator('.dialog .btn-primary').click();
     await overflow('Siege');
@@ -325,7 +377,7 @@ try {
   // 510 px tall and the longest briefing is not. Its Begin button must be in the frame.
   const wide = await browser.newPage({ viewport: { width: 1000, height: 800 } });
   wide.on('pageerror', (e) => errors.push(e.message));
-  await wide.goto(base);
+  await host(wide);
   const wideFrame = await mount(wide, 966, `${base}?embed=1&lang=pl&level=split-brain`);
   await wideFrame.locator('.dialog .btn-primary').waitFor();
   await dialogFits(wideFrame, 'the split-brain briefing at 966 px');
