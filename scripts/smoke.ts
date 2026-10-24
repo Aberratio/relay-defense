@@ -3,6 +3,7 @@
 // Fails on any page error. Run after `npm run build`: `npm run smoke`.
 import { chromium, type Frame, type Page } from 'playwright';
 import { preview } from 'vite';
+import { SIEGE } from '../src/levels/siege';
 
 const server = await preview({ preview: { port: 4719, strictPort: true, host: 'localhost' } });
 const base = 'http://localhost:4719/';
@@ -105,6 +106,45 @@ try {
   await page.locator('.dialog .btn-primary').click();
   const title = await page.locator('#level-name').textContent();
   if (!title?.startsWith('Siege 1')) fail(`expected Siege chapter 1, got ${title}`);
+
+  // Two tabs: a win saved in one shows in the other's open menu without a reload.
+  const tabs = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const [tabA, tabB] = [await tabs.newPage(), await tabs.newPage()];
+  for (const tab of [tabA, tabB]) {
+    tab.on('pageerror', (e) => errors.push(e.message));
+    await tab.goto(`${base}?lang=en`);
+  }
+  await tabA.evaluate(() =>
+    localStorage.setItem('relay-defense:progress:v1', JSON.stringify({ handshake: 3 })),
+  );
+  await tabB
+    .locator('.level-node[aria-label$="3 of 3 stars"]')
+    .first()
+    .waitFor({ timeout: 5000 })
+    .catch(() => fail('a win saved in another tab did not show in the open menu'));
+  // A Siege checkpoint saved in the other tab: the menu offers it, and a button that held the
+  // focus during the redraw still holds it.
+  await tabB.locator('.level-node').nth(1).focus();
+  await tabA.evaluate(
+    ([version]) =>
+      localStorage.setItem(
+        'relay-defense:siege:v1',
+        JSON.stringify({
+          stars: [3, 2],
+          checkpoint: { version, chapter: 2, carry: { credits: 90, towers: [] } },
+        }),
+      ),
+    [SIEGE.version] as const,
+  );
+  await tabB
+    .locator('#siege .btn-primary', { hasText: 'chapter 3' })
+    .waitFor({ timeout: 5000 })
+    .catch(() => fail('a Siege checkpoint saved in another tab did not show in the open menu'));
+  const kept = await tabB.evaluate(
+    () => document.activeElement === document.querySelectorAll('.level-node')[1],
+  );
+  if (!kept) fail('redrawing the menu after another tab saved lost the focus');
+  await tabs.close();
 
   // Embed: a parent page frames the game and receives its height.
   const parent = await browser.newPage({ viewport: { width: 1000, height: 800 } });
