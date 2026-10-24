@@ -33,15 +33,7 @@ const watchCsp = (context: BrowserContext) =>
         errors.push(`CSP: ${m.text()}`);
     }),
   );
-const openPage = browser.newPage.bind(browser);
-browser.newPage = async (...args) => {
-  const page = await openPage(...args);
-  page.on('console', (m) => {
-    if (m.type() === 'error' && /Content Security Policy/i.test(m.text()))
-      errors.push(`CSP: ${m.text()}`);
-  });
-  return page;
-};
+// browser.newPage() opens its page through this.newContext(), so this one wrapper covers both.
 const openContext = browser.newContext.bind(browser);
 browser.newContext = async (...args) => {
   const context = await openContext(...args);
@@ -603,11 +595,20 @@ try {
   await returned.locator('#speed').click();
   await returned.locator('.dialog-result h2').waitFor({ timeout: 120_000 });
   const replayed = (await returned.locator('.dialog-result h2').textContent())?.match(/\d+/)?.[0];
-  if (!replayed || !challengerTook?.includes(` ${replayed} lives`))
+  if (!replayed || !challengerTook?.includes(` ${replayed} li`))
     fail(`the replay took ${replayed} where the result says "${challengerTook}"`);
   await returned.locator('.dialog .btn-primary').click();
   if ((await returned.locator('.dialog h2').textContent()) !== winner)
     fail('back from the replay the result changed');
+  const rivalTook = await returned.locator('.dialog .result-news li').nth(1).textContent();
+  await returned.locator('.dialog .btn-ghost').nth(1).click();
+  await returned.locator('.dialog-result h2').waitFor({ timeout: 120_000 });
+  const rivalReplayed = (await returned.locator('.dialog-result h2').textContent())?.match(
+    /\d+/,
+  )?.[0];
+  if (!rivalReplayed || !rivalTook?.includes(` ${rivalReplayed} li`))
+    fail(`the rival's replay took ${rivalReplayed} where the result says "${rivalTook}"`);
+  await returned.locator('.dialog .btn-primary').click();
   const direct = await browser.newPage({ viewport: { width: 360, height: 740 } });
   direct.on('pageerror', (e) => errors.push(e.message));
   await direct.goto(result);

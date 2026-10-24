@@ -118,9 +118,10 @@ A mode for two players, with no account and no server: the whole duel travels in
   Mother counts her Spiderlings), times its strength (×1 to ×4); a group's cost is rounded up. A
   wave has one to four groups of up to 500 monsters.
 - **Why both play both sides.** Measured before the mode was built: whoever moves second and sees
-  the other's plan always wins, at any price of monsters. With each player attacking the other's
-  defence that advantage cancels out, and nothing has to be hidden. Lives are counted without a
-  limit, so the score tells a weak defence from a good one instead of ending 20 to 20.
+  the other's plan always wins, at every price tried (0.2 to 1.5 gold per bounty point). With
+  each player attacking the other's defence that advantage cancels out, and nothing has to be
+  hidden. Lives are counted without a limit, so the score tells a weak defence from a good one
+  instead of ending 20 to 20.
 - **A defence is a script.** It replays exactly against other waves; a move the gold no longer
   covers is skipped and counted. In a sparring run moves wait for the build phase, because a
   replay applies them only between waves.

@@ -382,7 +382,8 @@ const en = {
         ? 'Their defence stays as it is for all four waves.'
         : `Before later waves their defence makes ${n} more ${n === 1 ? 'move' : 'moves'}.`,
     taken: 'Taken',
-    took: (n: number) => `Your waves took ${n} lives from their Heart Tree.`,
+    took: (n: number) =>
+      `Your waves took ${plural(n, 'en', ['life', 'lives', 'lives'])} from their Heart Tree.`,
     skipped: (n: number) =>
       `${n} ${n === 1 ? 'move' : 'moves'} of the defence ${n === 1 ? 'was' : 'were'} skipped: the gold ran short.`,
     backToEditor: 'Back to your waves',
@@ -393,14 +394,16 @@ const en = {
     doneLead: 'Send this link to your rival: it shows both of you the result.',
     seeResult: 'See the result',
     winner: { challenger: 'The challenger wins', rival: 'The rival wins', draw: 'A draw' },
-    challengerTook: (n: number) => `The challenger's waves took ${n} lives.`,
-    rivalTook: (n: number) => `The rival's waves took ${n} lives.`,
+    challengerTook: (n: number) =>
+      `The challenger's waves took ${plural(n, 'en', ['life', 'lives', 'lives'])}.`,
+    rivalTook: (n: number) =>
+      `The rival's waves took ${plural(n, 'en', ['life', 'lives', 'lives'])}.`,
     linkTitle: 'Duel link',
     badLink: 'This duel link is broken or incomplete.',
     oldLink:
       'This duel link was made with another version of the game, so its result could differ. Ask for a new one.',
     replayTitle: (map: string) => `Duel replay: ${map}`,
-    tookBy: (n: number) => `These waves took ${n} lives.`,
+    tookBy: (n: number) => `These waves took ${plural(n, 'en', ['life', 'lives', 'lives'])}.`,
     backToResult: 'Back to the result',
     watchChallenger: "Watch the challenger's waves",
     watchRival: "Watch the rival's waves",
@@ -834,9 +837,10 @@ const pl: Strings = {
     laterMoves: (n) =>
       n === 0
         ? 'Ich obrona zostaje taka sama przez wszystkie cztery fale.'
-        : `Przed kolejnymi falami ich obrona wykona jeszcze ${n} ${n === 1 ? 'ruch' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'ruchy' : 'ruchów'}.`,
+        : `Przed kolejnymi falami ich obrona wykona jeszcze ${plural(n, 'pl', ['ruch', 'ruchy', 'ruchów'])}.`,
     taken: 'Zabrane',
-    took: (n) => `Twoje fale zabrały ${n} żyć z ich Drzewa Serca.`,
+    took: (n) =>
+      `Twoje fale zabrały ${plural(n, 'pl', ['życie', 'życia', 'żyć'])} z ich Drzewa Serca.`,
     skipped: (n) => `Pominięte ruchy obrony: ${n}. Zabrakło złota.`,
     backToEditor: 'Wróć do swoich fal',
     answerTitle: 'Twoja odpowiedź jest gotowa',
@@ -846,14 +850,15 @@ const pl: Strings = {
     doneLead: 'Wyślij ten link rywalowi: pokaże wynik wam obojgu.',
     seeResult: 'Zobacz wynik',
     winner: { challenger: 'Wygrywa wyzywający', rival: 'Wygrywa rywal', draw: 'Remis' },
-    challengerTook: (n) => `Fale wyzywającego zabrały ${n} żyć.`,
-    rivalTook: (n) => `Fale rywala zabrały ${n} żyć.`,
+    challengerTook: (n) =>
+      `Fale wyzywającego zabrały ${plural(n, 'pl', ['życie', 'życia', 'żyć'])}.`,
+    rivalTook: (n) => `Fale rywala zabrały ${plural(n, 'pl', ['życie', 'życia', 'żyć'])}.`,
     linkTitle: 'Link pojedynku',
     badLink: 'Ten link pojedynku jest uszkodzony albo niepełny.',
     oldLink:
       'Ten link pojedynku powstał w innej wersji gry, więc wynik mógłby się różnić. Poproś o nowy.',
     replayTitle: (map) => `Powtórka pojedynku: ${map}`,
-    tookBy: (n) => `Te fale zabrały ${n} żyć.`,
+    tookBy: (n) => `Te fale zabrały ${plural(n, 'pl', ['życie', 'życia', 'żyć'])}.`,
     backToResult: 'Wróć do wyniku',
     watchChallenger: 'Zobacz fale wyzywającego',
     watchRival: 'Zobacz fale rywala',
