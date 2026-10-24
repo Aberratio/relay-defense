@@ -125,6 +125,8 @@ try {
   const troll = page.locator('.dialog-bestiary .card[data-kind="bulwark"]');
   if ((await troll.getAttribute('class')) !== 'card is-unknown') fail('the Troll card is open');
   if ((await troll.textContent())?.includes('Troll')) fail('an unfound card gives its name away');
+  if ((await troll.locator('h4').textContent()) !== 'Monster not met yet')
+    fail('an unfound card should say what kind of character is missing');
   if (!(await troll.textContent())?.includes('Appears in: 3. Iron Hides'))
     fail('an unfound card does not say where it appears');
   await page.keyboard.press('Escape');

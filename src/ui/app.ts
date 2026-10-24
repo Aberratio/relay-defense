@@ -1057,10 +1057,15 @@ export class App {
                   ]),
                 ]
               : []),
-            h('p', { class: 'card-where', text: `${t.metIn}: ${where}` }),
+            h('p', { class: 'card-where', text: `${t.firstIn}: ${where}` }),
           ]
         : [
-            h('h4', { class: 'card-name', text: t.unknown }),
+            h('h4', {
+              class: 'card-name',
+              text: (TOWER_KINDS as readonly string[]).includes(kind)
+                ? t.unknownDefender
+                : t.unknownMonster,
+            }),
             h('p', { class: 'card-where', text: `${t.appearsIn}: ${where}` }),
           ];
       return h('li', { class: found ? 'card' : 'card is-unknown', attrs: { 'data-kind': kind } }, [
@@ -1687,6 +1692,12 @@ export class App {
     const game = this.game;
     if (!game) return;
     this.renderer.handle(events);
+    // A monster that spawns and falls or leaks within one frame at top speed is gone before the
+    // frame loop looks at the board; its hit, kill or leak still counts as meeting it.
+    const met = events.flatMap((e) =>
+      e.type === 'hit' || e.type === 'kill' || e.type === 'leak' ? [e.kind] : [],
+    );
+    if (met.length) this.meet([], met);
     let waves = false;
     for (const e of events) {
       switch (e.type) {

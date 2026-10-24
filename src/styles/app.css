@@ -1369,9 +1369,10 @@ kbd {
   border-style: dashed;
 }
 
+/* A grey shape: plain black would vanish on the dark card. */
 .card.is-unknown .icon {
-  filter: brightness(0);
-  opacity: 0.55;
+  filter: brightness(0) invert(0.6);
+  opacity: 0.6;
 }
 
 .card.is-unknown .card-name {
