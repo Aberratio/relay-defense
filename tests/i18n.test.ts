@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMY_KINDS, TARGET_MODES, TOWER_KINDS } from '../src/engine/types';
 import { LEVELS } from '../src/levels/levels';
-import { detectLang, LANGS, strings, type Strings } from '../src/ui/i18n';
+import { detectLang, LANGS, strings, withLang, type Strings } from '../src/ui/i18n';
 import { newKinds } from '../src/ui/app';
 
 function shape(value: unknown): unknown {
@@ -94,5 +94,22 @@ describe('result news', () => {
     expect(strings('en').bestiary.found(['Unicorn', 'Troll'])).toBe(
       'New in the bestiary: Unicorn and Troll.',
     );
+  });
+});
+
+describe('language in the URL', () => {
+  it('sets lang and keeps the other parameters', () => {
+    expect(withLang('', 'en')).toBe('?lang=en');
+    expect(withLang('?level=colossus&lang=pl', 'en')).toBe('?level=colossus&lang=en');
+    expect(withLang('?mode=siege', 'pl')).toBe('?mode=siege&lang=pl');
+  });
+  it('is read back by detectLang', () => {
+    expect(detectLang(new URLSearchParams(withLang('?level=x', 'en')), 'pl-PL')).toBe('en');
+  });
+});
+
+describe('Troll text', () => {
+  it('names no armour number, which differs between levels and the Siege', () => {
+    for (const lang of LANGS) expect(strings(lang).enemies.bulwark.text).not.toMatch(/\d/);
   });
 });

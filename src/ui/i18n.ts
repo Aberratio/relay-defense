@@ -16,6 +16,13 @@ export function detectLang(params: URLSearchParams, browser: string | undefined)
   return browser?.toLowerCase().startsWith('pl') ? 'pl' : 'en';
 }
 
+/** The query string with `lang` set, other parameters kept, so a reload keeps the choice. */
+export function withLang(search: string, lang: Lang): string {
+  const params = new URLSearchParams(search);
+  params.set('lang', lang);
+  return `?${params.toString()}`;
+}
+
 interface Named {
   name: string;
   text: string;
@@ -99,6 +106,7 @@ const en = {
   build: 'Defenders',
   startWave: 'Start wave',
   waveRunning: 'Wave in progress',
+  waveLost: 'Wave lost',
   nextWave: 'Next wave',
   laterWaves: 'Later',
   remaining: (n: number) => `${n} left`,
@@ -236,7 +244,7 @@ const en = {
     mite: { name: 'Spiderling', text: 'Tiny and fast, and it comes in swarms.' },
     bulwark: {
       name: 'Troll',
-      text: 'Armoured: every hit loses 6 damage, so small hits barely scratch it.',
+      text: 'Armoured: every hit loses as much damage as its armour, so small hits barely scratch it.',
     },
     phantom: {
       name: 'Wraith',
@@ -464,6 +472,7 @@ const pl: Strings = {
   build: 'Obrońcy',
   startWave: 'Start fali',
   waveRunning: 'Fala w toku',
+  waveLost: 'Fala przegrana',
   nextWave: 'Następna fala',
   laterWaves: 'Później',
   remaining: (n) => `zostało ${n}`,
@@ -600,7 +609,7 @@ const pl: Strings = {
     mite: { name: 'Pajączek', text: 'Mały i szybki, przychodzi rojami.' },
     bulwark: {
       name: 'Troll',
-      text: 'Opancerzony: każde trafienie traci 6 obrażeń, więc drobne strzały ledwo go drapią.',
+      text: 'Opancerzony: każde trafienie traci tyle obrażeń, ile wynosi pancerz, więc drobne strzały ledwo go drapią.',
     },
     phantom: {
       name: 'Upiór',

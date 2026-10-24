@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { loadProgress, mergeProgress, recordResult, starsFor } from '../src/ui/progress';
+import {
+  allCleared,
+  loadProgress,
+  mergeProgress,
+  recordResult,
+  starsFor,
+} from '../src/ui/progress';
 
 function memory(): Storage {
   const data = new Map<string, string>();
@@ -69,5 +75,17 @@ describe('progress', () => {
 
   it('merges two saves level by level', () => {
     expect(mergeProgress({ a: 1, b: 3 }, { b: 2, c: 2 })).toEqual({ a: 1, b: 3, c: 2 });
+  });
+});
+
+describe('allCleared', () => {
+  const ids = ['a', 'b', 'c'];
+  it('needs a win in every level, not only the last one', () => {
+    expect(allCleared(ids, { c: 2 })).toBe(false);
+    expect(allCleared(ids, { a: 1, c: 3 })).toBe(false);
+    expect(allCleared(ids, { a: 1, b: 1, c: 1 })).toBe(true);
+  });
+  it('ignores saved results of levels that no longer exist', () => {
+    expect(allCleared(ids, { a: 1, b: 2, gone: 3 })).toBe(false);
   });
 });

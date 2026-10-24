@@ -31,8 +31,9 @@ import {
   recordFound,
   type Bestiary,
 } from './bestiary';
-import { strings, type Lang, type Strings } from './i18n';
+import { strings, withLang, type Lang, type Strings } from './i18n';
 import {
+  allCleared,
   isSaveKey,
   loadProgress,
   loadSiege,
@@ -345,7 +346,13 @@ export class App {
     $('speed').addEventListener('click', () => this.cycleSpeed());
     $('start-wave').addEventListener('click', () => this.startWave());
     for (const btn of $('lang-switch').querySelectorAll<HTMLButtonElement>('button[data-lang]')) {
-      btn.addEventListener('click', () => this.applyLang(btn.dataset.lang === 'pl' ? 'pl' : 'en'));
+      btn.addEventListener('click', () => {
+        const lang = btn.dataset.lang === 'pl' ? 'pl' : 'en';
+        this.applyLang(lang);
+        // Standalone, the choice goes in the URL so a reload keeps it; in the embed the host sets it.
+        if (!this.opts.embed)
+          history.replaceState(history.state, '', withLang(location.search, lang));
+      });
     }
     window.addEventListener('storage', (e) => {
       if (isSaveKey(e.key)) this.reloadSaves();
@@ -424,10 +431,6 @@ export class App {
       this.renderWaves();
       this.renderControls();
     }
-    if (this.dialogKind === 'help') this.openHelp();
-    else if (this.dialogKind === 'bestiary') this.openBestiary();
-    else if (this.dialogKind === 'brief') this.openBrief();
-    else if (this.dialogKind === 'result') this.openResult();
   }
 
   private levelTitle(index: number): string {
@@ -1160,7 +1163,13 @@ export class App {
         button(this.t.replay, 'btn-ghost', () => this.openLevel(this.levelIndex, false));
       button(this.t.backToLevels, 'btn-ghost', () => this.showMenu());
     }
-    const last = chapter !== null ? chapter + 1 >= SIEGE_CHAPTERS.length : !next;
+    const last =
+      chapter !== null
+        ? chapter + 1 >= SIEGE_CHAPTERS.length
+        : allCleared(
+            LEVELS.map((l) => l.id),
+            this.progress,
+          );
     const text = won
       ? this.t.victoryText(game.lives, game.maxLives)
       : this.t.defeatText(game.wave + 1, game.waveCount);
@@ -1556,7 +1565,7 @@ export class App {
     const idx = Math.min(game.wave, game.waveCount - 1);
     $('wave-title').textContent = done
       ? t.noMoreWaves
-      : `${running ? t.waveRunning : idx === game.waveCount - 1 ? t.lastWave : t.nextWave} · ${idx + 1}/${game.waveCount}`;
+      : `${game.phase === 'lost' ? t.waveLost : running ? t.waveRunning : idx === game.waveCount - 1 ? t.lastWave : t.nextWave} · ${idx + 1}/${game.waveCount}`;
     const start = $('start-wave') as HTMLButtonElement;
     start.textContent = t.startWave;
     start.disabled = game.phase !== 'build';
