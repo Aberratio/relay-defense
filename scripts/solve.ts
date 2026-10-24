@@ -7,6 +7,7 @@
 //   npm run solve -- <level-id> [hp-scale] [look-ahead waves]
 //   npm run solve -- siege-<n> [hp-scale] [look-ahead waves]   a Siege chapter from its floor
 //   npm run solve -- siege [hp-scale] [look-ahead waves]       the whole Siege, chapter by chapter
+//   npm run solve -- duel-<map> [hp-scale] [look-ahead waves]  a duel map's sparring run
 import { Game } from '../src/engine/game';
 import { isBuildableTile, tileAt } from '../src/engine/grid';
 import type { Action } from '../src/engine/replay';
@@ -14,6 +15,7 @@ import { apply } from '../src/engine/replay';
 import { TOWERS, invested } from '../src/engine/stats';
 import type { LevelDef } from '../src/engine/types';
 import { levelById } from '../src/levels/levels';
+import { sparringById } from '../src/levels/duel';
 import { SIEGE_CHAPTERS, chapterById } from '../src/levels/siege';
 
 const [id = '', scaleArg = '1', aheadArg = '2'] = process.argv.slice(2);
@@ -136,7 +138,7 @@ if (id === 'siege') {
     if (game.phase !== 'won') break;
   }
 } else {
-  const base = levelById(id) ?? chapterById(id);
+  const base = levelById(id) ?? chapterById(id) ?? sparringById(id);
   if (!base) throw new Error(`no level "${id}"`);
   const level = scaled(base);
   const game = new Game(level);
