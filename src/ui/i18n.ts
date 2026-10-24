@@ -544,7 +544,7 @@ const pl: Strings = {
     newDefenders: (n) =>
       n === 1
         ? 'nowy obrońca'
-        : plural(n, 'pl', ['nowy obrońca', 'nowi obrońcy', 'nowych obrońców']),
+        : plural(n, 'pl', ['nowy obrońca', 'nowych obrońców', 'nowych obrońców']),
     newMonsters: (n) =>
       n === 1 ? 'nowy potwór' : plural(n, 'pl', ['nowy potwór', 'nowe potwory', 'nowych potworów']),
   },
